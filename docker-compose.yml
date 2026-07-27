@@ -1,0 +1,5 @@
+name: chile-seismic-streaming-pipeline
+
+# Phase 0 placeholder.
+# Kafka, Schema Registry, Kpow, and Postgres services will be added in later phases.
+services: {}

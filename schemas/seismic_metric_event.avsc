@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "SeismicMetricEvent",
+  "namespace": "com.rhonnydc.seismic",
+  "fields": [
+    {
+      "name": "metric_id",
+      "type": "string"
+    },
+    {
+      "name": "window_start",
+      "type": "string"
+    },
+    {
+      "name": "window_end",
+      "type": "string"
+    },
+    {
+      "name": "event_count",
+      "type": "int"
+    },
+    {
+      "name": "max_magnitude",
+      "type": "double"
+    },
+    {
+      "name": "avg_depth_km",
+      "type": "double"
+    }
+  ]
+}
