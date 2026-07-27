@@ -1,51 +1,55 @@
 # Architecture
 
-## Target Architecture
+## Target Flow
 
 ```text
-Earthquake Source / Event Poller
--> Kafka topic: raw_earthquakes
--> Schema Registry
--> Python Consumer / Processor
--> Kafka topics: enriched_earthquakes, seismic_metrics, dead_letter_earthquakes
--> Postgres Analytical Sink
--> Data Quality Checks
--> Kpow Observability
+Fake earthquake producer
+        |
+        v
+raw_earthquakes
+        |
+        v
+Schema Registry validation
+        |
+        v
+Python processor
+        |
+        +--> enriched_earthquakes --> Postgres
+        |
+        +--> seismic_metrics -------> Postgres
+        |
+        +--> dead_letter_earthquakes
 ```
+
+Kpow will be connected to the Kafka cluster for topic, message, and consumer group inspection.
 
 ## Components
 
-### Earthquake Source / Event Poller
+| Component | Responsibility |
+| --- | --- |
+| Fake producer | Generate deterministic seismic events for local development and tests. |
+| Live producer | Optional later source that reads from an external earthquake API. |
+| Kafka | Transport events between source, processor, metrics, and dead-letter streams. |
+| Schema Registry | Manage event contracts and compatibility. |
+| Python processor | Validate, enrich, route, and publish events. |
+| Postgres | Store enriched events and metrics for analytical queries. |
+| Kpow | Provide visibility into Kafka during local development. |
 
-The first source will generate fake seismic events so the project can run locally without depending on an external API.
+## Topic Design
 
-A live API producer may be added later as an optional source.
+| Topic | Producer | Consumer |
+| --- | --- | --- |
+| `raw_earthquakes` | Fake or live source | Python processor |
+| `enriched_earthquakes` | Python processor | Postgres sink |
+| `seismic_metrics` | Python processor | Postgres sink |
+| `dead_letter_earthquakes` | Python processor | Manual inspection or future replay workflow |
 
-### Kafka
+## Failure Handling
 
-Kafka will be the central streaming backbone. The initial planned topics are:
+Invalid or unprocessable events should not stop the processor. They should be published to `dead_letter_earthquakes` with enough context to diagnose the failure.
 
-- `raw_earthquakes`
-- `enriched_earthquakes`
-- `seismic_metrics`
-- `dead_letter_earthquakes`
+Dead-letter event shape will be defined in a later phase once validation and processing rules are implemented.
 
-### Schema Registry
+## Local Runtime
 
-Schema Registry will be used to manage event contracts and validate event structure over time.
-
-### Python Processor
-
-Python services will consume raw events, validate and enrich them, publish successful outputs, and route invalid events to a dead letter topic.
-
-### Postgres Analytical Sink
-
-Postgres will store processed events and metrics in a simple analytical model that can be inspected locally.
-
-### Data Quality Checks
-
-Data quality checks will be added incrementally to validate completeness, ranges, required fields, and analytical consistency.
-
-### Kpow Observability
-
-Kpow will be used later to inspect Kafka topics, consumer groups, messages, and pipeline behavior during local development.
+The local runtime will be based on Docker Compose. Terraform is planned only as a later cloud-ready layer and is not required for the local MVP.

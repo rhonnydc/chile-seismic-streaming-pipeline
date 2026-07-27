@@ -2,7 +2,7 @@
 
 ## Phase 0: Base Design
 
-Create the repository structure, documentation, naming conventions, environment example, Makefile, Python package skeleton, and infrastructure placeholders.
+Create the repository structure, documentation, naming conventions, environment example, Makefile, Python package skeleton, and infrastructure directories.
 
 ## Phase 1: Local Docker Foundation
 

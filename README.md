@@ -1,91 +1,87 @@
 # Chilean Seismic Streaming Data Pipeline
 
-Portfolio-grade Data Engineering project inspired by Chilean seismic activity.
+Streaming data pipeline based on Chilean seismic events.
 
-The goal is to build a local-first streaming data pipeline that can simulate or ingest earthquake events, publish them to Kafka, validate them with data contracts, process and enrich them, generate analytical metrics, and persist results in an analytical sink.
+The project is designed to run locally first and evolve in small phases: event generation, Kafka ingestion, schema validation, processing, analytical persistence, quality checks, tests, and observability.
 
-## Target Architecture
+## Architecture
 
 ```text
-Earthquake Source / Event Poller
--> Kafka topic: raw_earthquakes
+Fake or live earthquake source
+-> raw_earthquakes
 -> Schema Registry
--> Python Consumer / Processor
--> Kafka topics: enriched_earthquakes, seismic_metrics, dead_letter_earthquakes
--> Postgres Analytical Sink
--> Data Quality Checks
--> Kpow Observability
+-> Python processor
+-> enriched_earthquakes
+-> seismic_metrics
+-> dead_letter_earthquakes
+-> Postgres analytical sink
+-> Kpow for Kafka inspection
 ```
 
-## Project Goals
+## Current Status
 
-- Build a streaming pipeline that is understandable for recruiters and technically defensible for Data Engineering profiles.
-- Start with fake seismic events so the project can run without depending on an external API.
-- Keep Docker Compose as the main local execution mechanism in later phases.
-- Use explicit schemas to introduce data contracts from the beginning.
-- Add automated testing, observability, reproducible infrastructure, and technical documentation incrementally.
-- Keep Terraform cloud-ready, without making it required for local execution.
+Phase 0: repository foundation.
 
-## Current Phase
+This phase defines the repository structure, base documentation, configuration examples, initial schemas, Python package layout, and development conventions.
 
-**Phase 0: Base project design and repository structure**
+## Scope
 
-This phase defines the initial repository layout, naming conventions, documentation structure, configuration placeholders, and technical decisions. It does not implement the full streaming pipeline yet.
+The first working version will prioritize:
 
-See [docs/phase-0-design.md](docs/phase-0-design.md) for the detailed scope and completion checklist.
+- Local execution with Docker Compose.
+- Fake seismic events as the default input source.
+- Kafka topics for raw, enriched, metrics, and dead-letter events.
+- Avro schemas for event contracts.
+- Python producers, processors, and sink logic.
+- Postgres as the first analytical store.
+- pytest-based unit, contract, and integration tests.
+- Kpow for Kafka visibility during development.
 
-## Planned Tools
+Terraform is planned as an optional cloud-ready layer. It must not be required for local development.
 
-- Python
-- Docker Compose
-- Apache Kafka
-- Schema Registry
-- Kpow
-- Postgres
-- pytest
-- GitHub Actions
-- Terraform
-
-## Initial Repository Structure
+## Repository Layout
 
 ```text
 .
-+-- docs/
-+-- infra/
-+-- schemas/
-+-- scripts/
-+-- src/
-+-- tests/
-+-- .env.example
-+-- .gitignore
-+-- docker-compose.yml
-+-- Makefile
-+-- pyproject.toml
-+-- README.md
++-- docs/              Technical documentation and project decisions
++-- infra/             Docker and Terraform project files
++-- schemas/           Avro event contracts
++-- scripts/           Operational helper scripts
++-- src/               Python package source
++-- tests/             Unit, integration, and contract tests
++-- .env.example       Local configuration template
++-- docker-compose.yml Local services entrypoint, added in later phases
++-- Makefile           Development command shortcuts
++-- pyproject.toml     Python package and tooling configuration
 ```
 
-## Out Of Scope For The Initial MVP
+## Planned Topics
 
-The first version intentionally avoids the following tools to keep the project focused:
+| Topic | Purpose |
+| --- | --- |
+| `raw_earthquakes` | Raw events produced by fake or live sources. |
+| `enriched_earthquakes` | Validated and enriched seismic events. |
+| `seismic_metrics` | Aggregated or derived operational metrics. |
+| `dead_letter_earthquakes` | Invalid or unprocessable events with failure context. |
 
-- Flink
-- Kubernetes
-- Spark
-- Airflow
-- Iceberg
-- Prometheus
-- Grafana
+## Documentation
 
-## Local Setup
+- [Architecture](docs/architecture.md)
+- [Phase 0 Design](docs/phase-0-design.md)
+- [Naming Conventions](docs/naming-conventions.md)
+- [Technical Decisions](docs/technical-decisions.md)
+- [Roadmap](docs/roadmap.md)
 
-Phase 0 does not start any streaming services yet. The commands below are prepared so the project can grow without changing its basic workflow.
+## Local Commands
 
 ```bash
-make help
 make install
+make lint
 make test
 ```
 
-## Roadmap
+`make docker-up` and `make docker-down` are reserved for the local runtime once the Docker Compose stack is added.
 
-See [docs/roadmap.md](docs/roadmap.md).
+## Not In The Initial MVP
+
+The initial version avoids Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana. Those tools can be valuable in larger systems, but they would add operational weight before the core streaming path is proven.

@@ -1,56 +1,66 @@
 # Naming Conventions
 
+Consistent names make the pipeline easier to inspect in Kafka, logs, tests, and documentation.
+
 ## Kafka Topics
 
-Use lowercase snake case and plural domain nouns.
+Topic names use lowercase snake case and describe the event stream, not the producing service.
 
-```text
-raw_earthquakes
-enriched_earthquakes
-seismic_metrics
-dead_letter_earthquakes
-```
+| Topic | Description |
+| --- | --- |
+| `raw_earthquakes` | Unprocessed seismic events from fake or live sources. |
+| `enriched_earthquakes` | Validated events with derived fields added by the processor. |
+| `seismic_metrics` | Aggregated or derived metrics produced from seismic events. |
+| `dead_letter_earthquakes` | Events that failed validation or processing. |
 
 ## Schemas
 
-Use lowercase snake case and include the event type.
+Schema filenames map one-to-one to event types.
 
-```text
-raw_earthquake_event.avsc
-enriched_earthquake_event.avsc
-seismic_metric_event.avsc
-```
+| File | Event |
+| --- | --- |
+| `raw_earthquake_event.avsc` | Input event contract. |
+| `enriched_earthquake_event.avsc` | Processed event contract. |
+| `seismic_metric_event.avsc` | Metric event contract. |
 
 ## Python Modules
 
-Use lowercase snake case and name modules by responsibility.
+Python modules should be named by responsibility.
 
 ```text
 fake_earthquake_producer.py
 live_earthquake_producer.py
-earthquake_consumer.py
 earthquake_processor.py
 postgres_sink.py
 ```
 
+Avoid generic names such as `main.py`, `utils.py`, or `handler.py` unless the module has a narrow and documented role.
+
 ## Tests
 
-Use the `test_*.py` pattern and keep tests grouped by type.
+Tests are grouped by execution cost and dependency boundary.
+
+```text
+tests/unit/
+tests/contracts/
+tests/integration/
+```
+
+Examples:
 
 ```text
 tests/unit/test_earthquake_processor.py
-tests/integration/test_postgres_sink.py
 tests/contracts/test_raw_earthquake_schema.py
+tests/integration/test_postgres_sink.py
 ```
 
-## Documentation
+## Environment Variables
 
-Use lowercase kebab case or snake case consistently. This project uses kebab-style concepts in readable Markdown filenames only when useful, but current docs use snake case for simplicity.
+Environment variables use uppercase snake case and include the owning system when useful.
 
 ```text
-architecture.md
-phase-0-design.md
-naming-conventions.md
-technical-decisions.md
-roadmap.md
+KAFKA_BOOTSTRAP_SERVERS
+SCHEMA_REGISTRY_URL
+POSTGRES_HOST
+EARTHQUAKE_API_URL
 ```

@@ -1,37 +1,41 @@
 # Technical Decisions
 
-## Local-first development
+This document records early project decisions so later phases can extend the pipeline without changing its basic direction.
 
-The pipeline will be designed to run locally using Docker Compose before introducing cloud infrastructure.
+## Local execution is the default path
 
-## Fake data first
+Docker Compose will be the primary runtime for development and demos. A reviewer should be able to run the project locally without cloud credentials.
 
-The first producer will generate fake seismic events. A live API producer may be added later, but the project must not depend on an external API to work.
+## Fake data comes before live ingestion
 
-## Kafka as the streaming backbone
+The first producer will generate synthetic seismic events. This keeps development deterministic and prevents the pipeline from depending on API availability, rate limits, or external schema changes.
 
-Kafka will be used as the central event streaming platform.
+Live ingestion can be added later as a second producer that publishes to the same raw topic contract.
 
-## Schema Registry and contracts
+## Kafka is the streaming backbone
 
-Events will be validated using explicit schemas to demonstrate data contract practices.
+Kafka is used to model the project as an event-driven pipeline. The first topics separate raw input, enriched output, metrics, and failed events.
 
-## Python for producers and consumers
+## Event contracts are first-class artifacts
 
-Python will be used for ingestion, processing, validation, and sink logic.
+Schemas live in `schemas/` and are version-controlled. The initial format is Avro because it works well with Schema Registry and makes compatibility rules explicit.
 
-## Postgres as the analytical sink
+## Python owns application logic
 
-Postgres will be used as the first analytical destination because it is simple, inspectable, and appropriate for a local portfolio project.
+Python will be used for producers, processors, validation helpers, and sink logic. This keeps the first implementation approachable while still allowing production-style structure and tests.
 
-## Kpow for Kafka observability
+## Postgres is the first analytical sink
 
-Kpow will be introduced after Kafka is running locally to inspect topics, messages, and consumer behavior.
+Postgres is sufficient for the initial analytical layer: it is easy to run locally, inspect with SQL, and validate in integration tests.
 
-## Terraform as cloud-ready infrastructure
+## Kpow is used for Kafka observability
 
-Terraform will be included as a future infrastructure layer, but it must not be required to run the local MVP.
+Kpow will be added once Kafka is running. Its role is operational visibility into topics, messages, and consumer groups during local development.
 
-## Excluded from the initial MVP
+## Terraform is optional infrastructure
 
-Flink, Kubernetes, Spark, Airflow, Iceberg, Prometheus, and Grafana are intentionally excluded to keep the first version focused.
+Terraform belongs in the roadmap, but it must not block the local pipeline. The local Docker Compose path remains the source of truth for the MVP.
+
+## Tools intentionally excluded from the MVP
+
+Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana are out of scope for the first implementation. The project should prove the streaming path before adding distributed processing, orchestration, lakehouse storage, or a monitoring stack.
