@@ -50,18 +50,18 @@ See [docs/phase-0-design.md](docs/phase-0-design.md) for the detailed scope and 
 
 ```text
 .
-├── docs/
-├── infra/
-├── schemas/
-├── scripts/
-├── src/
-├── tests/
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── Makefile
-├── pyproject.toml
-└── README.md
++-- docs/
++-- infra/
++-- schemas/
++-- scripts/
++-- src/
++-- tests/
++-- .env.example
++-- .gitignore
++-- docker-compose.yml
++-- Makefile
++-- pyproject.toml
++-- README.md
 ```
 
 ## Out Of Scope For The Initial MVP
