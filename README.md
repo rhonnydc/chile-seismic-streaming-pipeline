@@ -10,7 +10,7 @@ This phase includes:
 
 - Kafka as the local event broker.
 - Schema Registry as the local schema service.
-- Kpow configured as the local Kafka inspection UI, pending a local license.
+- Kpow as the local Kafka inspection UI, using a local license.
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
@@ -81,10 +81,12 @@ LICENSE_EXPIRY=
 LICENSE_SIGNATURE=
 ```
 
+If the provided environment block omits `LICENSE_CREDITS`, use the `Cluster Credits` value from the license certificate. Copy the signature directly from the original text to avoid transcription errors.
+
 ## Running The Stack
 
 ```bash
-docker compose config
+docker compose config --quiet
 docker compose up -d
 docker compose ps
 ```
@@ -102,7 +104,7 @@ make ps
 | --- | --- |
 | Kafka | `localhost:9092` |
 | Schema Registry | `http://localhost:8081` |
-| Kpow | Pending `.env.kpow`, then `http://localhost:3000` |
+| Kpow | `http://localhost:3000` after configuring `.env.kpow` |
 | Postgres | `localhost:5432` |
 
 Inside Docker, services communicate through the Compose network. For example, Schema Registry and Kpow use `kafka:29092`, while clients running on the host use `localhost:9092`.

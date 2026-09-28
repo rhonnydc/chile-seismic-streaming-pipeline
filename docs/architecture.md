@@ -6,7 +6,7 @@
 Host machine
   |-- localhost:9092  -> Kafka
   |-- localhost:8081  -> Schema Registry
-  |-- localhost:3000  -> Kpow, pending local license
+  |-- localhost:3000  -> Kpow (requires local license)
   |-- localhost:5432  -> Postgres
 
 Docker Compose network
@@ -23,7 +23,7 @@ Phase 1 creates the local infrastructure layer only. It does not create producer
 | --- | --- |
 | Kafka | Local event broker for future seismic events. |
 | Schema Registry | Local schema service connected to Kafka. |
-| Kpow | Local UI configured for inspecting Kafka and Schema Registry, pending a local license. |
+| Kpow | Local UI for inspecting Kafka and Schema Registry; requires a local license. |
 | Postgres | Local database prepared for later analytical persistence. |
 
 ## Kafka Connectivity
@@ -53,7 +53,7 @@ Schema Registry stores schema metadata in Kafka. In this phase it is running and
 
 ## Kpow Connectivity
 
-Kpow is configured to publish to the host at `http://localhost:3000`, but the UI is pending a local license in `.env.kpow`.
+Kpow publishes to the host at `http://localhost:3000` when a valid local license is configured in `.env.kpow`.
 
 Inside Docker Compose, it connects to:
 
@@ -63,6 +63,8 @@ schema-registry:8081
 ```
 
 License values should be copied from `.env.kpow.example` into `.env.kpow`. The template is versioned, while `.env.kpow` is ignored by Git.
+
+The local Kafka cluster has one broker, so Kpow uses `REPLICATION_FACTOR=1` for its internal topics.
 
 ## Postgres Connectivity
 

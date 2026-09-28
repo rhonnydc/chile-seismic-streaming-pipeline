@@ -2,7 +2,7 @@
 
 ## Phase 1 Scope
 
-Phase 1 configures Kpow as the local Kafka observability tool. Kpow access is pending a local license in `.env.kpow`.
+Phase 1 configures Kpow as the local Kafka observability tool. Its UI requires a valid local license in `.env.kpow`.
 
 This phase does not include Prometheus, Grafana, alerting, distributed tracing, log aggregation, or production monitoring. The goal is to make the local Kafka stack inspectable while the pipeline is still small.
 
