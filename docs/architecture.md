@@ -53,7 +53,7 @@ Schema Registry stores schema metadata in Kafka. In this phase it is running and
 
 ## Kpow Connectivity
 
-Kpow is configured to publish to the host at `http://localhost:3000`, but the UI is pending a local Community Edition license.
+Kpow is configured to publish to the host at `http://localhost:3000`, but the UI is pending a local Community Edition license in `.env.kpow`.
 
 Inside Docker Compose, it connects to:
 
@@ -62,7 +62,7 @@ kafka:29092
 schema-registry:8081
 ```
 
-License values should be stored in `.env.kpow`, which is ignored by Git.
+License values should be copied from `.env.kpow.example` into `.env.kpow`. The template is versioned, while `.env.kpow` is ignored by Git.
 
 ## Postgres Connectivity
 

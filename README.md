@@ -58,6 +58,28 @@ Copy-Item .env.example .env
 
 Kpow Community Edition requires a free local license before the UI is usable. Store license variables in `.env.kpow`; this file is ignored by Git through the existing `.env.*` rule.
 
+Create the local Kpow license file from the versioned template:
+
+```bash
+cp .env.kpow.example .env.kpow
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.kpow.example .env.kpow
+```
+
+Then fill `.env.kpow` with the license values from the Kpow Community Edition email:
+
+```env
+LICENSE_ID=
+LICENSE_CODE=COMMUNITY
+LICENSEE=
+LICENSE_EXPIRY=
+LICENSE_SIGNATURE=
+```
+
 ## Running The Stack
 
 ```bash
@@ -79,7 +101,7 @@ make ps
 | --- | --- |
 | Kafka | `localhost:9092` |
 | Schema Registry | `http://localhost:8081` |
-| Kpow | Pending local license, then `http://localhost:3000` |
+| Kpow | Pending `.env.kpow`, then `http://localhost:3000` |
 | Postgres | `localhost:5432` |
 
 Inside Docker, services communicate through the Compose network. For example, Schema Registry and Kpow use `kafka:29092`, while clients running on the host use `localhost:9092`.
