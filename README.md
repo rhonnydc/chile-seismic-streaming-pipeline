@@ -10,7 +10,7 @@ This phase includes:
 
 - Kafka as the local event broker.
 - Schema Registry as the local schema service.
-- Kpow configured as the local Kafka inspection UI, pending a local Community Edition license.
+- Kpow configured as the local Kafka inspection UI, pending a local license.
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
@@ -56,7 +56,7 @@ Copy-Item .env.example .env
 
 `.env.example` is versioned because it documents the variables required by the project. `.env` is ignored by Git because it is the local machine-specific copy.
 
-Kpow Community Edition requires a free local license before the UI is usable. Store license variables in `.env.kpow`; this file is ignored by Git through the existing `.env.*` rule.
+Kpow requires a local license before the UI is usable. Store license variables in `.env.kpow`; this file is ignored by Git through the existing `.env.*` rule.
 
 Create the local Kpow license file from the versioned template:
 
@@ -70,12 +70,13 @@ On Windows PowerShell:
 Copy-Item .env.kpow.example .env.kpow
 ```
 
-Then fill `.env.kpow` with the license values from the Kpow Community Edition email:
+Then fill `.env.kpow` with the license values from the Kpow email:
 
 ```env
 LICENSE_ID=
-LICENSE_CODE=COMMUNITY
+LICENSE_CODE=
 LICENSEE=
+LICENSE_CREDITS=
 LICENSE_EXPIRY=
 LICENSE_SIGNATURE=
 ```

@@ -49,7 +49,7 @@ services:
       - seismic-network
 
   kpow:
-    image: factorhouse/kpow-ce:latest
+    image: factorhouse/kpow:latest
     container_name: chile-seismic-kpow
     depends_on:
       kafka:

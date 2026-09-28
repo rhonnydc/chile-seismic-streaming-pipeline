@@ -2,7 +2,7 @@
 
 ## Phase 1 Scope
 
-Phase 1 configures Kpow as the local Kafka observability tool. Kpow access is pending a local Community Edition license in `.env.kpow`.
+Phase 1 configures Kpow as the local Kafka observability tool. Kpow access is pending a local license in `.env.kpow`.
 
 This phase does not include Prometheus, Grafana, alerting, distributed tracing, log aggregation, or production monitoring. The goal is to make the local Kafka stack inspectable while the pipeline is still small.
 
@@ -21,7 +21,7 @@ kafka:29092
 schema-registry:8081
 ```
 
-Kpow Community Edition requires a free local license before the UI is usable. Copy `.env.kpow.example` to `.env.kpow`, then fill the license values from the Kpow Community Edition email. `.env.kpow` is ignored by Git.
+Kpow requires a local license before the UI is usable. Copy `.env.kpow.example` to `.env.kpow`, then fill the license values from the Kpow email. `.env.kpow` is ignored by Git.
 
 ## What Can Be Observed
 

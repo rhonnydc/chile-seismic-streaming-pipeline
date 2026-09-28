@@ -53,7 +53,7 @@ Schema Registry stores schema metadata in Kafka. In this phase it is running and
 
 ## Kpow Connectivity
 
-Kpow is configured to publish to the host at `http://localhost:3000`, but the UI is pending a local Community Edition license in `.env.kpow`.
+Kpow is configured to publish to the host at `http://localhost:3000`, but the UI is pending a local license in `.env.kpow`.
 
 Inside Docker Compose, it connects to:
 
