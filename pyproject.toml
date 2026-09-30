@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Streaming data pipeline inspired by Chilean seismic activity."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["confluent-kafka>=2.15.1,<3"]
 
 [project.optional-dependencies]
 dev = [

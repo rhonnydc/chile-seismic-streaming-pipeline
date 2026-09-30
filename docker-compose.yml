@@ -60,11 +60,12 @@ services:
       - path: .env.kpow
         required: false
     ports:
-      - "${KPOW_PORT:-3000}:3000"
+      - "127.0.0.1:${KPOW_PORT:-3000}:3000"
     environment:
       BOOTSTRAP: kafka:29092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       REPLICATION_FACTOR: 1
+      ALLOW_TOPIC_INSPECT: "true"
     networks:
       - seismic-network
 

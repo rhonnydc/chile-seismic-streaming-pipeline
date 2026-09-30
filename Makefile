@@ -1,4 +1,10 @@
-.PHONY: help install format lint test up down ps logs restart clean clean-python docs
+-include .env
+export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC
+export FAKE_PRODUCER_EVENT_COUNT FAKE_PRODUCER_INTERVAL_SECONDS
+
+PYTHON ?= $(firstword $(wildcard .venv/Scripts/python.exe .venv/bin/python) python)
+
+.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake
 
 help:
 	@echo "Available commands:"
@@ -13,18 +19,20 @@ help:
 	@echo "  make restart      Restart the local Docker Compose stack"
 	@echo "  make clean        Stop the stack and remove local volumes"
 	@echo "  make clean-python Remove local Python cache files"
+	@echo "  make create-topics Create raw_earthquakes if needed"
+	@echo "  make produce-fake  Publish simulated earthquakes to Kafka"
 
 install:
-	pip install -e ".[dev]"
+	$(PYTHON) -m pip install -e ".[dev]"
 
 format:
-	python -m ruff format src tests
+	$(PYTHON) -m ruff format src tests scripts
 
 lint:
-	python -m ruff check src tests
+	$(PYTHON) -m ruff check src tests scripts
 
 test:
-	pytest
+	$(PYTHON) -m pytest
 
 up:
 	docker compose up -d
@@ -50,3 +58,9 @@ clean-python:
 
 docs:
 	@echo "Documentation lives in the docs/ directory."
+
+create-topics:
+	$(PYTHON) scripts/create_topics.py
+
+produce-fake:
+	$(PYTHON) -m seismic_pipeline.producers.fake_earthquake_producer

@@ -2,11 +2,11 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Producers, consumers, processing logic, tests, and cloud infrastructure are intentionally left for later phases.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 adds a Python fake earthquake producer that publishes JSON events to `raw_earthquakes`.
 
 ## Phase 1 Scope
 
-This phase includes:
+Phase 1 includes:
 
 - Kafka as the local event broker.
 - Schema Registry as the local schema service.
@@ -14,7 +14,7 @@ This phase includes:
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
-This phase prepares the local runtime for Phase 2, where a fake producer can publish events to `raw_earthquakes`.
+Phase 2 uses this local runtime for the flow: fake producer -> Kafka `raw_earthquakes` -> Kpow.
 
 ## Repository Layout
 
@@ -36,6 +36,7 @@ This phase prepares the local runtime for Phase 2, where a fake producer can pub
 
 - Docker Desktop
 - Docker Compose v2
+- Python 3.11 or newer and pip for Phase 2
 - Make, optional on Windows
 
 Kafka, Schema Registry, Kpow, and Postgres do not need to be installed directly on the host machine.
@@ -98,6 +99,56 @@ make up
 make ps
 ```
 
+Wait until Kafka is healthy before creating the topic.
+
+## Phase 2: Fake Earthquake Producer
+
+Create a Python virtual environment and install the project:
+
+```bash
+python -m venv .venv
+# Activate the environment, then:
+python -m pip install -e ".[dev]"
+```
+
+On Windows PowerShell, activate it with `.\.venv\Scripts\Activate.ps1`; on macOS or Linux, use `source .venv/bin/activate`. Set `FAKE_PRODUCER_EVENT_COUNT` and `FAKE_PRODUCER_INTERVAL_SECONDS` in `.env` to change the default 10 events and 1 second between events.
+
+After `make up` and `make ps`:
+
+```bash
+make create-topics
+make produce-fake
+```
+
+Without Make, run `python scripts/create_topics.py` and `python -m seismic_pipeline.producers.fake_earthquake_producer`. Direct Python commands read process environment variables, or use the local defaults (`localhost:9092`, `raw_earthquakes`, 10 events, 1 second); Make loads `.env` for these settings.
+
+Open Kpow at `http://localhost:3000`, go to **Data → Inspect**, select `raw_earthquakes`, and click **Search**. The local Compose configuration enables topic inspection and binds Kpow to `127.0.0.1`, so message keys and values are visible from this host. Each message has an `event_id` key and a JSON value like:
+
+```json
+{
+  "event_id": "fake-20260929-a1b2c3d4e5f6",
+  "source": "simulator",
+  "source_event_id": "fake-20260929-a1b2c3d4e5f6",
+  "event_time_utc": "2026-09-29T12:00:00Z",
+  "updated_at_utc": "2026-09-29T12:00:00Z",
+  "place": "Near La Serena, Chile",
+  "country": "Chile",
+  "region": "Coquimbo",
+  "magnitude": 4.2,
+  "magnitude_type": "ml",
+  "depth_km": 45.8,
+  "latitude": -29.9,
+  "longitude": -71.2,
+  "status": "simulated",
+  "event_type": "earthquake",
+  "tsunami": false,
+  "url": null,
+  "ingested_at": "2026-09-29T12:00:00Z"
+}
+```
+
+The producer generates the project's internal event model, rather than copying a source-specific GeoJSON feature. A future adapter can map USGS `id`, `properties`, and `geometry.coordinates` into the same fields. This phase uses fake events and plain JSON only; it does not ingest a live API, consume events, write to Postgres, or register a formal schema.
+
 ## Local Services
 
 | Service | Local URL or port |
@@ -149,10 +200,6 @@ If `make` is available:
 ```bash
 make clean
 ```
-
-## Not Included Yet
-
-Phase 1 does not include Python producers, Python consumers, fake events, live earthquake API ingestion, definitive topic creation, dead-letter workflows, complex tests, CI/CD, Terraform, Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, Grafana, or ClickHouse.
 
 ## Documentation
 

@@ -21,7 +21,7 @@ Phase 1 creates the local infrastructure layer only. It does not create producer
 
 | Component | Responsibility |
 | --- | --- |
-| Kafka | Local event broker for future seismic events. |
+| Kafka | Local event broker for seismic events. |
 | Schema Registry | Local schema service connected to Kafka. |
 | Kpow | Local UI for inspecting Kafka and Schema Registry; requires a local license. |
 | Postgres | Local database prepared for later analytical persistence. |
@@ -37,7 +37,7 @@ Kafka is configured with separate listeners for host access and container-to-con
 
 This matters because `localhost` has a different meaning depending on where the client runs. From the host machine, `localhost` points to the Windows or macOS environment running Docker Desktop. From inside a container, `localhost` points to that same container, not to Kafka.
 
-`KAFKA_ADVERTISED_LISTENERS` tells Kafka which address clients should use after they connect. The external advertised listener is `localhost:9092` for host tools and future local Python clients. The internal advertised listener is `kafka:29092` for Schema Registry, Kpow, and future containers.
+`KAFKA_ADVERTISED_LISTENERS` tells Kafka which address clients should use after they connect. The external advertised listener is `localhost:9092` for host tools and the local Python producer. The internal advertised listener is `kafka:29092` for Schema Registry, Kpow, and future containers.
 
 ## Schema Registry Connectivity
 
@@ -97,24 +97,29 @@ chile-seismic-network
 
 This gives services stable DNS names such as `kafka`, `schema-registry`, and `postgres`.
 
-## Phase 2 Extension
-
-The next phase can add a fake producer that publishes seismic events to:
+## Phase 2 Event Flow
 
 ```text
-raw_earthquakes
+Python fake generator -> Python Kafka producer -> raw_earthquakes -> Kpow
 ```
 
-That producer should connect from the host using:
+The generator creates `EarthquakeEvent` objects with plausible Chilean data. The producer converts each object to JSON, uses `event_id` as the Kafka message key, and waits for delivery reports. A separate command creates `raw_earthquakes` with three partitions and replication factor one if it does not already exist. Kpow lets us inspect the topic, keys, and JSON values.
 
-```text
-localhost:9092
-```
+Both Python commands run on the host and connect through `KAFKA_BOOTSTRAP_SERVERS=localhost:9092`. A future containerized producer would instead connect to `kafka:29092`. Schema Registry is running in the Phase 1 stack, but Phase 2 publishes plain JSON and does not register or enforce an Avro schema.
 
-If a future producer runs as another Docker Compose service, it should use:
+### Source Data And Internal Model
 
-```text
-kafka:29092
-```
+The internal event model is independent of a particular data provider. The fake generator fills its fields directly. A future `normalize_usgs_event(raw_feature)` could map a USGS GeoJSON feature into the same model:
 
-Later phases can add consumers, enriched topics, metrics topics, dead-letter handling, Postgres tables, tests, and cloud infrastructure without changing the basic local runtime model.
+| Internal field | Possible GeoJSON source |
+| --- | --- |
+| `event_id`, `source` | Pipeline identifier derived from feature `id`; provider name (`usgs`) |
+| `source_event_id` | Feature `id` |
+| `magnitude`, `magnitude_type` | `properties.mag` and `properties.magType` |
+| `place`, `status`, `event_type`, `tsunami`, `url` | Other feature `properties` |
+| `event_time_utc`, `updated_at_utc` | `properties.time` and `properties.updated`, converted from epoch milliseconds to UTC |
+| `longitude`, `latitude`, `depth_km` | `geometry.coordinates`, in that order |
+| `ingested_at` | Time the pipeline receives the event |
+| `country`, `region` | Derived from the place or coordinates when possible |
+
+This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion remain outside Phase 2.
