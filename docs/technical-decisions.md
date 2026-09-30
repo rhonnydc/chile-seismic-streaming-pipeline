@@ -1,6 +1,6 @@
 # Technical Decisions
 
-This document records early project decisions so later phases can extend the pipeline without changing its basic direction.
+This document records the project's early design direction. See the [architecture decision records](adr/README.md) for phase-specific decisions and their status.
 
 ## Local execution is the default path
 
@@ -18,7 +18,9 @@ Kafka is used to model the project as an event-driven pipeline. The first topics
 
 ## Event contracts are first-class artifacts
 
-Schemas live in `schemas/` and are version-controlled. The initial format is Avro because it works well with Schema Registry and makes compatibility rules explicit.
+Schemas live in `schemas/` and are version-controlled. Avro is the target formal wire contract because Schema Registry can enforce compatibility rules.
+
+Phase 2 currently publishes JSON; the existing `.avsc` files are scaffolds. [ADR 003](adr/003-wire-contract.md) covers the contract and format cutover.
 
 ## Python owns application logic
 

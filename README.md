@@ -208,4 +208,5 @@ make clean
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)
 - [Technical Decisions](docs/technical-decisions.md)
+- [Architecture Decision Records](docs/adr/README.md)
 - [Roadmap](docs/roadmap.md)
