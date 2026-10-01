@@ -49,7 +49,7 @@ Inside Docker Compose, it connects to Kafka through:
 kafka:29092
 ```
 
-Schema Registry stores schema metadata in Kafka. In this phase it is running and ready, but no event schemas are registered automatically yet.
+Schema Registry stores schema metadata in Kafka. Phase 1 started it without an event schema; Phase 3 registers the `raw_earthquakes-value` Avro subject explicitly before the producer runs.
 
 ## Kpow Connectivity
 
@@ -103,9 +103,9 @@ This gives services stable DNS names such as `kafka`, `schema-registry`, and `po
 Python fake generator -> Python Kafka producer -> raw_earthquakes -> Kpow
 ```
 
-The generator creates `EarthquakeEvent` objects with plausible Chilean data. The producer converts each object to JSON, uses `event_id` as the Kafka message key, and waits for delivery reports. A separate command creates `raw_earthquakes` with three partitions and replication factor one if it does not already exist. Kpow lets us inspect the topic, keys, and JSON values.
+Phase 2 introduced the generator, which creates `EarthquakeEvent` objects with plausible Chilean data. At that point the producer converted each object to plain JSON, used `event_id` as the Kafka message key, and waited for delivery reports. A separate command created `raw_earthquakes` with three partitions and replication factor one if needed. Kpow made the topic, keys, and JSON values visible.
 
-Both Python commands run on the host and connect through `KAFKA_BOOTSTRAP_SERVERS=localhost:9092`. A future containerized producer would instead connect to `kafka:29092`. Schema Registry is running in the Phase 1 stack, but Phase 2 publishes plain JSON and does not register or enforce an Avro schema.
+Both Python commands run on the host and connect through `KAFKA_BOOTSTRAP_SERVERS=localhost:9092`. A future containerized producer would instead connect to `kafka:29092`. Phase 2 did not register or enforce an Avro schema; its retained JSON messages must be removed from the disposable local topic before Avro publication.
 
 ### Source Data And Internal Model
 
@@ -122,4 +122,16 @@ The internal event model is independent of a particular data provider. The fake 
 | `ingested_at` | Time the pipeline receives the event |
 | `country`, `region` | Derived from the place or coordinates when possible |
 
-This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion remain outside Phase 2.
+This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion remain outside Phase 3.
+
+## Phase 3 Avro Event Flow
+
+```text
+Fake generator -> EarthquakeEvent -> AvroSerializer -> raw_earthquakes -> Kpow
+                                        |
+                                        +-- schema ID lookup -> Schema Registry
+```
+
+The versioned record in [`schemas/raw_earthquake_event.avsc`](../schemas/raw_earthquake_event.avsc) matches the 18 fields of `EarthquakeEvent`. A registration command sets `BACKWARD_TRANSITIVE` compatibility and registers it under `raw_earthquakes-value`. The producer uses that registered schema to encode values as Avro with a schema ID, while the Kafka key remains the UTF-8 `event_id`. Automatic schema registration is disabled, so registration must happen first. Serialization occurs before the Kafka `produce` call; an invalid record is not queued.
+
+The safe local cutover deletes and recreates only the disposable `raw_earthquakes` topic before the first Avro message. This prevents retained Phase 2 JSON and new Avro values from sharing one topic. Kpow can then inspect the new messages and the registered subject. The [data contract guide](data-contracts.md) gives the exact commands and verification steps.

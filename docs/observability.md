@@ -25,7 +25,7 @@ Kpow requires a local license before the UI is usable. Copy `.env.kpow.example` 
 
 ## What Can Be Observed
 
-After the Kpow license is configured, and once producers, schemas, and consumers are added in later phases, Kpow can help inspect:
+With the local license configured, Kpow can inspect the Phase 3 `raw_earthquakes` messages and the registered `raw_earthquakes-value` schema. Consumer groups, offsets, and lag become useful when consumers are added in a later phase:
 
 | Area | What it helps answer |
 | --- | --- |
@@ -68,7 +68,7 @@ __consumer_offsets
 _schemas
 ```
 
-That is expected. Application topics and event data arrive in later phases.
+That is expected for Phase 1. Phase 3 adds `raw_earthquakes` and its Avro events.
 
 ## Why This Matters
 

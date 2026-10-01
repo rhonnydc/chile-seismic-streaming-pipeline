@@ -1,9 +1,11 @@
 # 003 — Versioned wire contract
 
-**Status:** Proposed · **Phase:** 3
+**Status:** Accepted · **Phase:** 3
 
-**Decision.** Make `schemas/raw_earthquake_event.avsc` match the published event model, register it in Schema Registry, and serialize new records as Avro. Set `BACKWARD_TRANSITIVE` compatibility and check changes against all registered versions before merge. Treat the current `.avsc` file as a scaffold: its fields do not yet match Phase 2 JSON.
+**Decision.** Use `schemas/raw_earthquake_event.avsc` as the versioned Avro contract for the 18 fields of the Phase 2 `EarthquakeEvent` model. Register it explicitly under `raw_earthquakes-value` in Schema Registry with `BACKWARD_TRANSITIVE` compatibility. The producer serializes message values as Avro using the registered schema ID and keeps `event_id` as the UTF-8 Kafka key. Check proposed schema changes against all registered versions before adoption.
 
 **Reason.** A registered contract lets producers and consumers evolve independently and catches incompatible field changes before runtime.
 
-**Adoption gate.** Demonstrate a serializer round trip and compatibility check. Do not mix unframed JSON and Avro in one consumer path: reset the disposable local topic or cut over to a new topic when retained records matter.
+**Verification.** Contract and producer tests passed. In the local stack, Schema Registry registered version 1 of `raw_earthquakes-value` with `BACKWARD_TRANSITIVE` compatibility, and the compatibility check passed. After resetting the disposable local topic, the fake producer published 10 records. All 10 were decoded with the registered Avro schema, and Kpow displayed their fields.
+
+**Consequence.** Phase 2 JSON records and Phase 3 Avro records must not share one consumer path. Reset the disposable local topic before the Avro cutover; use a new topic when retained records must be preserved.

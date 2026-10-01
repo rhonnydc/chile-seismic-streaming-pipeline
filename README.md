@@ -2,7 +2,7 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 adds a Python fake earthquake producer that publishes JSON events to `raw_earthquakes`.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry.
 
 ## Phase 1 Scope
 
@@ -14,7 +14,7 @@ Phase 1 includes:
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
-Phase 2 uses this local runtime for the flow: fake producer -> Kafka `raw_earthquakes` -> Kpow.
+The current flow is: fake producer -> Avro serializer and Schema Registry -> Kafka `raw_earthquakes` -> Kpow.
 
 ## Repository Layout
 
@@ -36,7 +36,7 @@ Phase 2 uses this local runtime for the flow: fake producer -> Kafka `raw_earthq
 
 - Docker Desktop
 - Docker Compose v2
-- Python 3.11 or newer and pip for Phase 2
+- Python 3.11 or newer and pip for the fake producer and contract tests
 - Make, optional on Windows
 
 Kafka, Schema Registry, Kpow, and Postgres do not need to be installed directly on the host machine.
@@ -101,7 +101,7 @@ make ps
 
 Wait until Kafka is healthy before creating the topic.
 
-## Phase 2: Fake Earthquake Producer
+## Fake Producer and Phase 3 Avro Contract
 
 Create a Python virtual environment and install the project:
 
@@ -113,41 +113,24 @@ python -m pip install -e ".[dev]"
 
 On Windows PowerShell, activate it with `.\.venv\Scripts\Activate.ps1`; on macOS or Linux, use `source .venv/bin/activate`. Set `FAKE_PRODUCER_EVENT_COUNT` and `FAKE_PRODUCER_INTERVAL_SECONDS` in `.env` to change the default 10 events and 1 second between events.
 
-After `make up` and `make ps`:
+After `make up` and `make ps`, register and check the contract before producing:
 
 ```bash
+make register-schemas
+make list-schemas
+make test-contracts
+make reset-raw-topic
 make create-topics
 make produce-fake
 ```
 
-Without Make, run `python scripts/create_topics.py` and `python -m seismic_pipeline.producers.fake_earthquake_producer`. Direct Python commands read process environment variables, or use the local defaults (`localhost:9092`, `raw_earthquakes`, 10 events, 1 second); Make loads `.env` for these settings.
+`make reset-raw-topic` deletes and recreates the disposable local topic. Run it before the first Avro publication if Phase 2 JSON messages may still be retained; it is unnecessary for an empty new topic. The producer requires the registered schema and does not register it automatically.
 
-Open Kpow at `http://localhost:3000`, go to **Data → Inspect**, select `raw_earthquakes`, and click **Search**. The local Compose configuration enables topic inspection and binds Kpow to `127.0.0.1`, so message keys and values are visible from this host. Each message has an `event_id` key and a JSON value like:
+Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/contracts tests/unit/test_fake_earthquake_producer.py`, `python scripts/reset_raw_topic.py` when cutting over from JSON, `python scripts/create_topics.py`, and `python -m seismic_pipeline.producers.fake_earthquake_producer`. Direct Python commands read process environment variables or use local defaults; Make loads `.env` for them.
 
-```json
-{
-  "event_id": "fake-20260929-a1b2c3d4e5f6",
-  "source": "simulator",
-  "source_event_id": "fake-20260929-a1b2c3d4e5f6",
-  "event_time_utc": "2026-09-29T12:00:00Z",
-  "updated_at_utc": "2026-09-29T12:00:00Z",
-  "place": "Near La Serena, Chile",
-  "country": "Chile",
-  "region": "Coquimbo",
-  "magnitude": 4.2,
-  "magnitude_type": "ml",
-  "depth_km": 45.8,
-  "latitude": -29.9,
-  "longitude": -71.2,
-  "status": "simulated",
-  "event_type": "earthquake",
-  "tsunami": false,
-  "url": null,
-  "ingested_at": "2026-09-29T12:00:00Z"
-}
-```
+Open Kpow at `http://localhost:3000`, inspect `raw_earthquakes` for Avro messages keyed by `event_id`, and check that the subject `raw_earthquakes-value` appears in Schema Registry. You can also verify the subject directly with `curl http://localhost:8081/subjects` (use `curl.exe` in PowerShell).
 
-The producer generates the project's internal event model, rather than copying a source-specific GeoJSON feature. A future adapter can map USGS `id`, `properties`, and `geometry.coordinates` into the same fields. This phase uses fake events and plain JSON only; it does not ingest a live API, consume events, write to Postgres, or register a formal schema.
+The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion, consumers, and Postgres writes are outside this phase.
 
 ## Local Services
 
@@ -204,6 +187,7 @@ make clean
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Data Contracts](docs/data-contracts.md)
 - [Observability](docs/observability.md)
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)

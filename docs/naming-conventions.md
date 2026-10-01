@@ -49,8 +49,8 @@ tests/integration/
 Examples:
 
 ```text
-tests/unit/test_earthquake_processor.py
-tests/contracts/test_raw_earthquake_schema.py
+tests/unit/test_fake_earthquake_producer.py
+tests/contracts/test_raw_earthquake_contract.py
 tests/integration/test_postgres_sink.py
 ```
 

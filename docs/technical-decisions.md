@@ -8,19 +8,19 @@ Docker Compose will be the primary runtime for development and demos. A reviewer
 
 ## Fake data comes before live ingestion
 
-The first producer will generate synthetic seismic events. This keeps development deterministic and prevents the pipeline from depending on API availability, rate limits, or external schema changes.
+The first producer generates synthetic seismic events. This keeps development deterministic and prevents the pipeline from depending on API availability, rate limits, or external schema changes.
 
 Live ingestion can be added later as a second producer that publishes to the same raw topic contract.
 
 ## Kafka is the streaming backbone
 
-Kafka is used to model the project as an event-driven pipeline. The first topics separate raw input, enriched output, metrics, and failed events.
+Kafka is used to model the project as an event-driven pipeline. `raw_earthquakes` is the current event topic; enriched output, metrics, and failed-event topics belong to later phases.
 
 ## Event contracts are first-class artifacts
 
-Schemas live in `schemas/` and are version-controlled. Avro is the target formal wire contract because Schema Registry can enforce compatibility rules.
+Schemas live in `schemas/` and are version-controlled. The Phase 3 code uses Avro as the `raw_earthquakes` wire format so Schema Registry can version the contract and enforce compatibility rules. The producer requires an explicitly registered schema under `raw_earthquakes-value`.
 
-Phase 2 currently publishes JSON; the existing `.avsc` files are scaffolds. [ADR 003](adr/003-wire-contract.md) covers the contract and format cutover.
+Phase 2 published plain JSON. Its retained local messages must be removed before Avro publication; the reset command is limited to the disposable local raw topic. The raw `.avsc` now matches the internal event model, while the other `.avsc` files remain scaffolds for later phases. [ADR 003](adr/003-wire-contract.md) is accepted after the Schema Registry compatibility setting and the end-to-end local cutover were verified.
 
 ## Python owns application logic
 
@@ -32,7 +32,7 @@ Postgres is sufficient for the initial analytical layer: it is easy to run local
 
 ## Kpow is used for Kafka observability
 
-Kpow will be added once Kafka is running. Its role is operational visibility into topics, messages, and consumer groups during local development.
+Kpow provides operational visibility into topics, messages, and Schema Registry during local development.
 
 ## Terraform is optional infrastructure
 
