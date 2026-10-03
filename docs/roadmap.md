@@ -18,7 +18,7 @@ Register schemas, validate event contracts, and add contract tests.
 
 ## Phase 4: Consumer and Processor
 
-Consume raw events, enrich them, publish successful events, generate metrics, and route invalid events to `dead_letter_earthquakes`.
+Consume Avro events from `raw_earthquakes`, apply Python enrichment, and publish Avro events to `enriched_earthquakes` using `event_id` as the key. Track progress with a consumer group and manual offset commits. Metrics and dead-letter handling are outside Phase 4.
 
 ## Phase 5: Analytical Sink
 

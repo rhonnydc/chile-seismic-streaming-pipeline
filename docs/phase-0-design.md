@@ -19,7 +19,7 @@ The phase is intentionally non-runtime. Kafka, Postgres, Schema Registry, Kpow, 
 
 ## Boundaries
 
-Phase 0 does not start services or implement application logic. It prepares the repo so runtime behavior can be added without reorganizing the project.
+Phase 0 does not start services or implement application logic.
 
 Out of scope:
 

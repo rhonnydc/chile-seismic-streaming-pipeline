@@ -14,17 +14,17 @@ Live ingestion can be added later as a second producer that publishes to the sam
 
 ## Kafka is the streaming backbone
 
-Kafka is used to model the project as an event-driven pipeline. `raw_earthquakes` is the current event topic; enriched output, metrics, and failed-event topics belong to later phases.
+Kafka carries the `raw_earthquakes` input stream and the `enriched_earthquakes` output stream. Metrics and failed-event topics belong to later phases.
 
 ## Event contracts are first-class artifacts
 
-Schemas live in `schemas/` and are version-controlled. The Phase 3 code uses Avro as the `raw_earthquakes` wire format so Schema Registry can version the contract and enforce compatibility rules. The producer requires an explicitly registered schema under `raw_earthquakes-value`.
+Schemas live in `schemas/` and are version-controlled. Phase 3 uses Avro for `raw_earthquakes`; Phase 4 uses Avro for `enriched_earthquakes`. Schema Registry versions the separate value contracts under `raw_earthquakes-value` and `enriched_earthquakes-value`. Both serializers require explicit registration.
 
-Phase 2 published plain JSON. Its retained local messages must be removed before Avro publication; the reset command is limited to the disposable local raw topic. The raw `.avsc` now matches the internal event model, while the other `.avsc` files remain scaffolds for later phases. [ADR 003](adr/003-wire-contract.md) is accepted after the Schema Registry compatibility setting and the end-to-end local cutover were verified.
+Phase 2 published plain JSON. Its retained local messages must be removed before Avro publication; the reset command is limited to the disposable local raw topic. The raw `.avsc` matches the internal event model, and the enriched `.avsc` adds six derived fields. The metric `.avsc` remains a scaffold for a later phase. [ADR 003](adr/003-wire-contract.md) records the verified raw Avro cutover.
 
 ## Python owns application logic
 
-Python will be used for producers, processors, validation helpers, and sink logic. This keeps the first implementation approachable while still allowing production-style structure and tests.
+Python runs the fake producer, Avro consumer, and enrichment function. Sink logic remains future work.
 
 ## Postgres is the first analytical sink
 
@@ -32,7 +32,7 @@ Postgres is sufficient for the initial analytical layer: it is easy to run local
 
 ## Kpow is used for Kafka observability
 
-Kpow provides operational visibility into topics, messages, and Schema Registry during local development.
+Kpow inspects topics, Avro messages, Schema Registry subjects, the consumer group, committed offsets, and lag during local development.
 
 ## Terraform is optional infrastructure
 
@@ -40,4 +40,4 @@ Terraform belongs in the roadmap, but it must not block the local pipeline. The 
 
 ## Tools intentionally excluded from the MVP
 
-Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana are out of scope for the first implementation. The project should prove the streaming path before adding distributed processing, orchestration, lakehouse storage, or a monitoring stack.
+Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana are out of scope for the first implementation.

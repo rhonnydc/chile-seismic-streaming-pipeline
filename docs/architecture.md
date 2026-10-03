@@ -37,7 +37,7 @@ Kafka is configured with separate listeners for host access and container-to-con
 
 This matters because `localhost` has a different meaning depending on where the client runs. From the host machine, `localhost` points to the Windows or macOS environment running Docker Desktop. From inside a container, `localhost` points to that same container, not to Kafka.
 
-`KAFKA_ADVERTISED_LISTENERS` tells Kafka which address clients should use after they connect. The external advertised listener is `localhost:9092` for host tools and the local Python producer. The internal advertised listener is `kafka:29092` for Schema Registry, Kpow, and future containers.
+`KAFKA_ADVERTISED_LISTENERS` tells Kafka which address clients should use after they connect. The external advertised listener is `localhost:9092` for host tools and the local Python producer and consumer. The internal advertised listener is `kafka:29092` for Schema Registry, Kpow, and future containers.
 
 ## Schema Registry Connectivity
 
@@ -49,7 +49,7 @@ Inside Docker Compose, it connects to Kafka through:
 kafka:29092
 ```
 
-Schema Registry stores schema metadata in Kafka. Phase 1 started it without an event schema; Phase 3 registers the `raw_earthquakes-value` Avro subject explicitly before the producer runs.
+Schema Registry stores schema metadata in Kafka. Phase 1 started it without an event schema; Phase 3 added `raw_earthquakes-value`, and Phase 4 adds `enriched_earthquakes-value`. Both subjects are registered explicitly before their producers run.
 
 ## Kpow Connectivity
 
@@ -135,3 +135,20 @@ Fake generator -> EarthquakeEvent -> AvroSerializer -> raw_earthquakes -> Kpow
 The versioned record in [`schemas/raw_earthquake_event.avsc`](../schemas/raw_earthquake_event.avsc) matches the 18 fields of `EarthquakeEvent`. A registration command sets `BACKWARD_TRANSITIVE` compatibility and registers it under `raw_earthquakes-value`. The producer uses that registered schema to encode values as Avro with a schema ID, while the Kafka key remains the UTF-8 `event_id`. Automatic schema registration is disabled, so registration must happen first. Serialization occurs before the Kafka `produce` call; an invalid record is not queued.
 
 The safe local cutover deletes and recreates only the disposable `raw_earthquakes` topic before the first Avro message. This prevents retained Phase 2 JSON and new Avro values from sharing one topic. Kpow can then inspect the new messages and the registered subject. The [data contract guide](data-contracts.md) gives the exact commands and verification steps.
+
+## Phase 4 Enrichment Flow
+
+```text
+Fake producer
+  -> raw_earthquakes (Avro, event_id key)
+  -> Python consumer, group seismic-enricher
+  -> pure enrichment function
+  -> enriched_earthquakes (Avro, event_id key)
+  -> Kpow inspection
+```
+
+The consumer runs on the host and uses the same external Kafka listener (`localhost:9092`) and Schema Registry endpoint (`http://localhost:8081`) as the fake producer. `AvroDeserializer` reads the schema ID carried with each raw value and resolves it through Schema Registry. The processing function copies the 18 raw fields and adds six derived fields. `AvroSerializer` writes the result using the separately registered `enriched_earthquakes-value` contract. The registration and topic-creation scripts now handle both topics.
+
+The `seismic-enricher` consumer group tracks its position in each raw topic partition. Automatic commits are disabled. For each input, the consumer waits for an enriched delivery report and then commits the source offset synchronously. If output delivery fails, or enrichment raises an error, it does not commit that input. A crash after output delivery but before the commit can cause the same input to be published again after restart, so the current delivery boundary is at least once. This simple phase has no dead-letter topic, metrics stream, or Postgres sink.
+
+A new consumer group starts at the earliest available raw offset; an existing group resumes from its committed offsets. Kpow can show the group, per-partition committed offsets, and lag, while its topic browser can show the original and enriched messages. The [observability guide](observability.md) lists the specific checks.

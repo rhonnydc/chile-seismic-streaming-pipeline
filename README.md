@@ -2,7 +2,7 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`.
 
 ## Phase 1 Scope
 
@@ -14,7 +14,7 @@ Phase 1 includes:
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
-The current flow is: fake producer -> Avro serializer and Schema Registry -> Kafka `raw_earthquakes` -> Kpow.
+The current flow is: fake producer -> Avro `raw_earthquakes` -> Python consumer and enrichment -> Avro `enriched_earthquakes` -> Kpow.
 
 ## Repository Layout
 
@@ -36,7 +36,7 @@ The current flow is: fake producer -> Avro serializer and Schema Registry -> Kaf
 
 - Docker Desktop
 - Docker Compose v2
-- Python 3.11 or newer and pip for the fake producer and contract tests
+- Python 3.11 or newer and pip for the producer, consumer, and tests
 - Make, optional on Windows
 
 Kafka, Schema Registry, Kpow, and Postgres do not need to be installed directly on the host machine.
@@ -130,7 +130,40 @@ Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/
 
 Open Kpow at `http://localhost:3000`, inspect `raw_earthquakes` for Avro messages keyed by `event_id`, and check that the subject `raw_earthquakes-value` appears in Schema Registry. You can also verify the subject directly with `curl http://localhost:8081/subjects` (use `curl.exe` in PowerShell).
 
-The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion, consumers, and Postgres writes are outside this phase.
+The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion and Postgres writes are outside the current implementation.
+
+## Phase 4: Consume and Enrich
+
+The enricher reads `raw_earthquakes` with the `seismic-enricher` consumer group, deserializes values through Schema Registry, and copies each raw record with six derived fields: `severity_level`, `is_shallow`, `event_date_utc`, `event_hour_utc`, `ingestion_latency_seconds`, and `processed_at_utc`. Ingestion latency is `ingested_at - event_time_utc` in seconds. It publishes the result as Avro to `enriched_earthquakes` with `event_id` as the message key.
+
+Start the stack and register both schemas before publishing or consuming. If the disposable raw topic still contains Phase 2 JSON messages, follow the reset procedure above before producing new Avro messages. Then run:
+
+```bash
+make up
+make ps
+make register-schemas
+make create-topics
+make produce-fake
+make test-enrichment
+make consume-enrich
+```
+
+`make consume-enrich` keeps running until interrupted. It uses manual offset commits after each enriched delivery report. A restart can therefore publish a duplicate if delivery succeeded but the process stopped before its source offset was committed. The default `auto.offset.reset=earliest` lets a new group process raw events already on the topic. A previously used group resumes from its committed offsets.
+
+On Windows without Make, the equivalent Phase 4 commands are:
+
+```powershell
+docker compose up -d
+.\.venv\Scripts\python.exe scripts/register_schemas.py
+.\.venv\Scripts\python.exe scripts/create_topics.py
+.\.venv\Scripts\python.exe -m seismic_pipeline.producers.fake_earthquake_producer
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_enrichment.py tests/contracts/test_enriched_earthquake_contract.py tests/unit/test_enriching_consumer.py
+.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.enriching_consumer
+```
+
+The direct Python commands use process environment variables or their local defaults; unlike Make, they do not load `.env` automatically. Set `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, `KAFKA_RAW_EARTHQUAKES_TOPIC`, `KAFKA_ENRICHED_EARTHQUAKES_TOPIC`, and `CONSUMER_GROUP_ID` in the shell if you change their defaults.
+
+In Kpow at `http://localhost:3000`, confirm that both topics exist, `enriched_earthquakes` receives records with derived fields and `event_id` keys, and the `seismic-enricher` group has committed offsets on `raw_earthquakes`. Its lag should decrease as records are processed. An invalid raw record stops this simple consumer without committing that record; this phase does not add a dead-letter topic.
 
 ## Local Services
 

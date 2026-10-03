@@ -1,10 +1,16 @@
 # Scripts
 
-Utility scripts will live here as the project grows.
+| Script | Operation |
+| --- | --- |
+| `register_schemas.py` | Register raw and enriched Avro value schemas in Schema Registry. |
+| `create_topics.py` | Create `raw_earthquakes` and `enriched_earthquakes` if missing. |
+| `reset_raw_topic.py` | Delete and recreate the disposable local raw topic during the JSON-to-Avro cutover. |
 
-Examples planned for later phases:
+From the repository root, after starting the Docker Compose stack:
 
-- Topic creation helpers.
-- Schema registration helpers.
-- Local smoke test helpers.
-- Data generation helpers.
+```powershell
+.\.venv\Scripts\python.exe scripts/register_schemas.py
+.\.venv\Scripts\python.exe scripts/create_topics.py
+```
+
+Run `reset_raw_topic.py` only when discarding retained Phase 2 JSON records from the local raw topic. Direct Python commands read process environment variables or use local defaults; they do not load `.env` automatically.

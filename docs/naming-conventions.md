@@ -1,17 +1,15 @@
 # Naming Conventions
 
-Consistent names make the pipeline easier to inspect in Kafka, logs, tests, and documentation.
-
 ## Kafka Topics
 
 Topic names use lowercase snake case and describe the event stream, not the producing service.
 
 | Topic | Description |
 | --- | --- |
-| `raw_earthquakes` | Unprocessed seismic events from fake or live sources. |
-| `enriched_earthquakes` | Validated events with derived fields added by the processor. |
-| `seismic_metrics` | Aggregated or derived metrics produced from seismic events. |
-| `dead_letter_earthquakes` | Events that failed validation or processing. |
+| `raw_earthquakes` | Simulated seismic events; a live source is planned. |
+| `enriched_earthquakes` | Raw event fields plus six derived fields. |
+| `seismic_metrics` | Planned aggregate metrics stream. |
+| `dead_letter_earthquakes` | Planned failed-event stream. |
 
 ## Schemas
 
@@ -29,9 +27,8 @@ Python modules should be named by responsibility.
 
 ```text
 fake_earthquake_producer.py
-live_earthquake_producer.py
-earthquake_processor.py
-postgres_sink.py
+enriching_consumer.py
+enrichment.py
 ```
 
 Avoid generic names such as `main.py`, `utils.py`, or `handler.py` unless the module has a narrow and documented role.
@@ -49,9 +46,9 @@ tests/integration/
 Examples:
 
 ```text
-tests/unit/test_fake_earthquake_producer.py
-tests/contracts/test_raw_earthquake_contract.py
-tests/integration/test_postgres_sink.py
+tests/unit/test_enrichment.py
+tests/unit/test_enriching_consumer.py
+tests/contracts/test_enriched_earthquake_contract.py
 ```
 
 ## Environment Variables
@@ -60,7 +57,9 @@ Environment variables use uppercase snake case and include the owning system whe
 
 ```text
 KAFKA_BOOTSTRAP_SERVERS
+KAFKA_RAW_EARTHQUAKES_TOPIC
+KAFKA_ENRICHED_EARTHQUAKES_TOPIC
+CONSUMER_GROUP_ID
 SCHEMA_REGISTRY_URL
 POSTGRES_HOST
-EARTHQUAKE_API_URL
 ```

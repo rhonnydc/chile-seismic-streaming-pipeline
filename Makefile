@@ -1,12 +1,13 @@
 -include .env
-export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC
+export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC KAFKA_ENRICHED_EARTHQUAKES_TOPIC
+export CONSUMER_GROUP_ID
 export FAKE_PRODUCER_EVENT_COUNT FAKE_PRODUCER_INTERVAL_SECONDS
 SCHEMA_REGISTRY_URL ?= http://localhost:8081
 export SCHEMA_REGISTRY_URL
 
 PYTHON ?= $(firstword $(wildcard .venv/Scripts/python.exe .venv/bin/python) python)
 
-.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic
+.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment
 
 help:
 	@echo "Available commands:"
@@ -21,12 +22,14 @@ help:
 	@echo "  make restart      Restart the local Docker Compose stack"
 	@echo "  make clean        Stop the stack and remove local volumes"
 	@echo "  make clean-python Remove local Python cache files"
-	@echo "  make create-topics Create raw_earthquakes if needed"
+	@echo "  make create-topics Create raw and enriched topics if needed"
 	@echo "  make produce-fake  Publish simulated earthquakes to Kafka"
-	@echo "  make register-schemas Register the raw Avro schema"
+	@echo "  make register-schemas Register raw and enriched Avro schemas"
 	@echo "  make list-schemas     List Schema Registry subjects"
 	@echo "  make test-contracts   Run Avro contract and producer tests"
 	@echo "  make reset-raw-topic  Delete and recreate local raw_earthquakes"
+	@echo "  make consume-enrich   Consume raw events and publish enriched events"
+	@echo "  make test-enrichment Run Phase 4 enrichment, contract, and consumer tests"
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -82,3 +85,9 @@ test-contracts:
 
 reset-raw-topic:
 	$(PYTHON) scripts/reset_raw_topic.py
+
+consume-enrich:
+	$(PYTHON) -m seismic_pipeline.consumers.enriching_consumer
+
+test-enrichment:
+	$(PYTHON) -m pytest tests/unit/test_enrichment.py tests/contracts/test_enriched_earthquake_contract.py tests/unit/test_enriching_consumer.py
