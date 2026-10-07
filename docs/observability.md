@@ -81,3 +81,22 @@ After registering both schemas, creating both topics, and publishing fake raw ev
 5. **Lag:** Compare the partition's end offset with its committed offset. Lag should fall as the consumer processes queued raw events; if more raw events arrive, it can rise again.
 
 The consumer logs `event_id`, source partition, and source offset after each successful commit. If processing stops on a bad input or output delivery failure, that input is not committed; inspect the logs and topic messages before restarting. This phase has no dead-letter topic or aggregate metrics.
+
+## Phase 5 Sink Checks
+
+Start the Postgres sink consumer after the table has been initialized with `make init-db` (or the equivalent `psql` command). Keep the enricher and sink in separate terminals, then publish fake events. The sink logs `event_id`, whether the row was newly inserted, the enriched topic partition and offset, and its consumer group after each successful Kafka offset commit.
+
+In Kpow, inspect `enriched_earthquakes` and the `seismic-postgres-sink` consumer group:
+
+1. **Input:** Enriched Avro messages are available with the expected `event_id` keys and derived fields.
+2. **Group:** `seismic-postgres-sink` subscribes to `enriched_earthquakes`, separately from `seismic-enricher` on `raw_earthquakes`.
+3. **Offsets and lag:** Committed offsets advance only after the matching Postgres write commits. Once all available messages have been handled, lag should reach zero. A stopped consumer may no longer appear as an active member, while its committed offsets remain.
+
+Check the database separately; Kpow does not show Postgres rows:
+
+```bash
+docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT COUNT(*) FROM enriched_earthquake_events;"
+docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT event_id, region, magnitude, severity_level, stored_at_utc FROM enriched_earthquake_events ORDER BY stored_at_utc DESC LIMIT 10;"
+```
+
+Run `make query-db` (or `sql/analytics_queries.sql` through `psql`) for the four analytical views of the stored events. A zero-lag group means its offsets caught up with Kafka at that moment; compare it with Postgres rows and sink logs to verify persistence. Replaying an event may log `inserted=False` because `ON CONFLICT (event_id) DO NOTHING` kept the existing row. If a database write or deserialization fails, the affected offset stays uncommitted and the consumer exits; inspect its error log before restarting.

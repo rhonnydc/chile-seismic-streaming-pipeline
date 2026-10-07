@@ -2,7 +2,7 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table.
 
 ## Phase 1 Scope
 
@@ -14,7 +14,7 @@ Phase 1 includes:
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
-The current flow is: fake producer -> Avro `raw_earthquakes` -> Python consumer and enrichment -> Avro `enriched_earthquakes` -> Kpow.
+The current flow is: fake producer -> Avro `raw_earthquakes` -> Python enrichment consumer -> Avro `enriched_earthquakes` -> Python Postgres sink consumer -> `enriched_earthquake_events`.
 
 ## Repository Layout
 
@@ -24,6 +24,7 @@ The current flow is: fake producer -> Avro `raw_earthquakes` -> Python consumer 
 +-- infra/             Docker and Terraform project files
 +-- schemas/           Avro event contracts
 +-- scripts/           Operational helper scripts
++-- sql/               Postgres table and analytical queries
 +-- src/               Python package source
 +-- tests/             Unit, integration, and contract tests
 +-- .env.example       Local configuration template
@@ -130,7 +131,7 @@ Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/
 
 Open Kpow at `http://localhost:3000`, inspect `raw_earthquakes` for Avro messages keyed by `event_id`, and check that the subject `raw_earthquakes-value` appears in Schema Registry. You can also verify the subject directly with `curl http://localhost:8081/subjects` (use `curl.exe` in PowerShell).
 
-The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion and Postgres writes are outside the current implementation.
+The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion is outside the current implementation.
 
 ## Phase 4: Consume and Enrich
 
@@ -164,6 +165,44 @@ docker compose up -d
 The direct Python commands use process environment variables or their local defaults; unlike Make, they do not load `.env` automatically. Set `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, `KAFKA_RAW_EARTHQUAKES_TOPIC`, `KAFKA_ENRICHED_EARTHQUAKES_TOPIC`, and `CONSUMER_GROUP_ID` in the shell if you change their defaults.
 
 In Kpow at `http://localhost:3000`, confirm that both topics exist, `enriched_earthquakes` receives records with derived fields and `event_id` keys, and the `seismic-enricher` group has committed offsets on `raw_earthquakes`. Its lag should decrease as records are processed. An invalid raw record stops this simple consumer without committing that record; this phase does not add a dead-letter topic.
+
+## Phase 5: Postgres Analytical Sink
+
+The second consumer reads Avro from `enriched_earthquakes` through Schema Registry and writes each event to `enriched_earthquake_events`. It uses the separate `seismic-postgres-sink` group. The table has `event_id` as its primary key and the sink uses `ON CONFLICT (event_id) DO NOTHING`: a replay cannot create a second row, and the first stored version wins. The sink commits the Postgres transaction before synchronously committing the Kafka offset. If either step fails, a replay may occur; the primary key makes that replay safe. Corrections to an existing `event_id` are not reflected by this Phase 5 policy.
+
+With Make, initialize the table and run the sink tests after starting the stack:
+
+```bash
+make up
+make register-schemas
+make create-topics
+make init-db
+make test-sink
+```
+
+Run `make consume-enrich` and `make consume-sink` in separate terminals; both keep running until interrupted. In a third terminal, run `make produce-fake`. After the consumer logs show stored events, run `make query-db` to see event counts, average magnitude, high-severity events, and average ingestion latency by region.
+
+On Windows PowerShell without Make, start the stack, register schemas, create topics, initialize Postgres, and run the sink tests:
+
+```powershell
+docker compose up -d
+.\.venv\Scripts\python.exe scripts/register_schemas.py
+.\.venv\Scripts\python.exe scripts/create_topics.py
+docker compose cp .\sql\init.sql postgres:/tmp/init.sql
+docker compose exec -T postgres psql -U seismic_user -d seismic -v ON_ERROR_STOP=1 -f /tmp/init.sql
+.\.venv\Scripts\python.exe -B -m pytest tests/unit/test_postgres_sink.py tests/unit/test_postgres_sink_consumer.py
+```
+
+Run `.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.enriching_consumer` in one terminal and `.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.postgres_sink_consumer` in another. Publish events in a third terminal with `.\.venv\Scripts\python.exe -m seismic_pipeline.producers.fake_earthquake_producer`. Stop the sink with Ctrl+C, then run the analytical queries:
+
+```powershell
+docker compose cp .\sql\analytics_queries.sql postgres:/tmp/analytics_queries.sql
+docker compose exec -T postgres psql -U seismic_user -d seismic -v ON_ERROR_STOP=1 -f /tmp/analytics_queries.sql
+```
+
+Direct Python commands use process environment variables or their local defaults; they do not load `.env` automatically. Set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_SINK_GROUP_ID`, `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, and `KAFKA_ENRICHED_EARTHQUAKES_TOPIC` in the shell if you change their defaults. Make loads `.env` and exports these settings.
+
+Check `SELECT COUNT(*) FROM enriched_earthquake_events;` in Postgres. In Kpow, inspect the `seismic-postgres-sink` group on `enriched_earthquakes`: committed offsets should advance and lag should reach zero after queued events are stored. Restarting a group resumes at its committed offsets; to deliberately replay retained events for an idempotency check, run the sink with a new `POSTGRES_SINK_GROUP_ID` and confirm the row count does not increase.
 
 ## Local Services
 

@@ -24,11 +24,11 @@ Phase 2 published plain JSON. Its retained local messages must be removed before
 
 ## Python owns application logic
 
-Python runs the fake producer, Avro consumer, and enrichment function. Sink logic remains future work.
+Python runs the fake producer, Avro enrichment consumer, and separate Postgres sink consumer. The sink maps enriched events to SQL independently of Kafka and commits each database transaction before its consumer commits the Kafka offset.
 
 ## Postgres is the first analytical sink
 
-Postgres is sufficient for the initial analytical layer: it is easy to run locally, inspect with SQL, and validate in integration tests.
+Postgres stores enriched events in `enriched_earthquake_events` with `event_id` as the primary key. The sink uses `ON CONFLICT (event_id) DO NOTHING` to make replays safe; the first stored version wins. The versioned SQL includes table initialization and simple analytical queries. [ADR 005](adr/005-postgres-sink.md) records the accepted choice and its local verification.
 
 ## Kpow is used for Kafka observability
 

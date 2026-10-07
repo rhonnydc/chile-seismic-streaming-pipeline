@@ -24,7 +24,7 @@ Phase 1 creates the local infrastructure layer only. It does not create producer
 | Kafka | Local event broker for seismic events. |
 | Schema Registry | Local schema service connected to Kafka. |
 | Kpow | Local UI for inspecting Kafka and Schema Registry; requires a local license. |
-| Postgres | Local database prepared for later analytical persistence. |
+| Postgres | Local database for Phase 5 analytical persistence of enriched events. |
 
 ## Kafka Connectivity
 
@@ -152,3 +152,18 @@ The consumer runs on the host and uses the same external Kafka listener (`localh
 The `seismic-enricher` consumer group tracks its position in each raw topic partition. Automatic commits are disabled. For each input, the consumer waits for an enriched delivery report and then commits the source offset synchronously. If output delivery fails, or enrichment raises an error, it does not commit that input. A crash after output delivery but before the commit can cause the same input to be published again after restart, so the current delivery boundary is at least once. This simple phase has no dead-letter topic, metrics stream, or Postgres sink.
 
 A new consumer group starts at the earliest available raw offset; an existing group resumes from its committed offsets. Kpow can show the group, per-partition committed offsets, and lag, while its topic browser can show the original and enriched messages. The [observability guide](observability.md) lists the specific checks.
+
+## Phase 5 Analytical Sink Flow
+
+```text
+raw_earthquakes (Avro)
+  -> seismic-enricher consumer -> enrichment -> enriched_earthquakes (Avro)
+  -> seismic-postgres-sink consumer -> enriched_earthquake_events (Postgres)
+  -> sql/analytics_queries.sql
+```
+
+The sink is a second Python consumer with its own `seismic-postgres-sink` group. It reads `enriched_earthquakes` using `AvroDeserializer` and Schema Registry, then calls a Postgres module that has no Kafka dependency. This separation lets the sink replay retained enriched events without re-running enrichment, change its storage behavior independently, scale its consumer group separately, and expose its own offsets and lag in Kpow.
+
+The versioned [`sql/init.sql`](../sql/init.sql) creates `enriched_earthquake_events` with the 24 enriched fields and a database-generated `stored_at_utc`. Avro timestamp strings become `TIMESTAMPTZ`, `event_date_utc` becomes `DATE`, and Avro doubles become `DOUBLE PRECISION`. Only `magnitude_type` and `url` are nullable under the current contract. The [`sql/analytics_queries.sql`](../sql/analytics_queries.sql) file queries regional counts, average magnitude, high-severity events, and average ingestion latency.
+
+Each event is inserted in one database transaction with `event_id` as the primary key and `ON CONFLICT (event_id) DO NOTHING`. The first stored version wins if the same ID appears again. After the database commit succeeds, the consumer commits that Kafka message's offset synchronously. A database failure leaves the offset uncommitted. A crash after the database commit but before the offset commit can cause a replay, which the primary key handles without adding another row. This is at-least-once delivery with an idempotent sink, not an atomic transaction across Kafka and Postgres. The consumer stops on an invalid record or write failure so the affected offset is available for investigation and retry.

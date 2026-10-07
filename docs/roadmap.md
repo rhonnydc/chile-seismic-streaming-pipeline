@@ -22,7 +22,7 @@ Consume Avro events from `raw_earthquakes`, apply Python enrichment, and publish
 
 ## Phase 5: Analytical Sink
 
-Persist enriched events and metrics in Postgres.
+Consume Avro events from `enriched_earthquakes` with a separate consumer group and persist them idempotently in Postgres. Expose simple analytical SQL queries. Aggregate metrics remain outside Phase 5.
 
 ## Phase 6: Data Quality and Testing
 
