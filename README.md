@@ -204,6 +204,17 @@ Direct Python commands use process environment variables or their local defaults
 
 Check `SELECT COUNT(*) FROM enriched_earthquake_events;` in Postgres. In Kpow, inspect the `seismic-postgres-sink` group on `enriched_earthquakes`: committed offsets should advance and lag should reach zero after queued events are stored. Restarting a group resumes at its committed offsets; to deliberately replay retained events for an idempotency check, run the sink with a new `POSTGRES_SINK_GROUP_ID` and confirm the row count does not increase.
 
+## Phase 6: Data Quality Checks
+
+With Postgres running and `enriched_earthquake_events` populated by the Phase 5 sink, run:
+
+```bash
+make test-quality
+make quality-checks
+```
+
+`quality-checks` prints PASS/FAIL for each rule and a summary. It exits with code `1` if any data rule fails (including an empty table), or `2` if the checks cannot run. Make loads the existing Postgres settings from `.env`. On Windows without Make, use `.\.venv\Scripts\python.exe -m pytest tests/unit/test_quality.py` and `.\.venv\Scripts\python.exe -m seismic_pipeline.quality.runner`; direct Python commands use process environment variables or local defaults. See [Data Quality Checks](docs/data-quality.md) for the rules and report interpretation.
+
 ## Local Services
 
 | Service | Local URL or port |
@@ -260,6 +271,7 @@ make clean
 
 - [Architecture](docs/architecture.md)
 - [Data Contracts](docs/data-contracts.md)
+- [Data Quality Checks](docs/data-quality.md)
 - [Observability](docs/observability.md)
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)

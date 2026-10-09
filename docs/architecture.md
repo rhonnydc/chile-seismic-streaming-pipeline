@@ -167,3 +167,13 @@ The sink is a second Python consumer with its own `seismic-postgres-sink` group.
 The versioned [`sql/init.sql`](../sql/init.sql) creates `enriched_earthquake_events` with the 24 enriched fields and a database-generated `stored_at_utc`. Avro timestamp strings become `TIMESTAMPTZ`, `event_date_utc` becomes `DATE`, and Avro doubles become `DOUBLE PRECISION`. Only `magnitude_type` and `url` are nullable under the current contract. The [`sql/analytics_queries.sql`](../sql/analytics_queries.sql) file queries regional counts, average magnitude, high-severity events, and average ingestion latency.
 
 Each event is inserted in one database transaction with `event_id` as the primary key and `ON CONFLICT (event_id) DO NOTHING`. The first stored version wins if the same ID appears again. After the database commit succeeds, the consumer commits that Kafka message's offset synchronously. A database failure leaves the offset uncommitted. A crash after the database commit but before the offset commit can cause a replay, which the primary key handles without adding another row. This is at-least-once delivery with an idempotent sink, not an atomic transaction across Kafka and Postgres. The consumer stops on an invalid record or write failure so the affected offset is available for investigation and retry.
+
+## Phase 6 Data Quality Flow
+
+```text
+enriched_earthquake_events (Postgres)
+  -> SQL checks over one consistent snapshot
+  -> Python PASS/FAIL report and process exit code
+```
+
+The quality runner reads the analytical table after the sink has stored events. Each query counts rows that violate a rule, including range, required-field, and enrichment-consistency checks. An empty table fails its own check. The runner reports each result and exits with a nonzero code when data is invalid or the checks cannot run. It does not modify rows or participate in Kafka consumption. The [data quality guide](data-quality.md) lists the rules and commands.

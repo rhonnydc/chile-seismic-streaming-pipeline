@@ -14,7 +14,7 @@ export POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD P
 
 PYTHON ?= $(firstword $(wildcard .venv/Scripts/python.exe .venv/bin/python) python)
 
-.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink
+.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink quality-checks test-quality
 
 help:
 	@echo "Available commands:"
@@ -41,6 +41,8 @@ help:
 	@echo "  make consume-sink  Consume enriched events and persist them in Postgres"
 	@echo "  make query-db      Run the analytical Postgres queries"
 	@echo "  make test-sink     Run Postgres sink and consumer tests"
+	@echo "  make quality-checks Run data quality checks against Postgres"
+	@echo "  make test-quality Run data quality unit tests"
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -116,3 +118,9 @@ query-db:
 
 test-sink:
 	$(PYTHON) -m pytest tests/unit/test_postgres_sink.py tests/unit/test_postgres_sink_consumer.py
+
+quality-checks:
+	$(PYTHON) -m seismic_pipeline.quality.runner
+
+test-quality:
+	$(PYTHON) -m pytest tests/unit/test_quality.py
