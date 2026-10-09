@@ -215,6 +215,22 @@ make quality-checks
 
 `quality-checks` prints PASS/FAIL for each rule and a summary. It exits with code `1` if any data rule fails (including an empty table), or `2` if the checks cannot run. Make loads the existing Postgres settings from `.env`. On Windows without Make, use `.\.venv\Scripts\python.exe -m pytest tests/unit/test_quality.py` and `.\.venv\Scripts\python.exe -m seismic_pipeline.quality.runner`; direct Python commands use process environment variables or local defaults. See [Data Quality Checks](docs/data-quality.md) for the rules and report interpretation.
 
+## Phase 7: Testing and CI
+
+Install the development dependencies with `make install` (or `python -m pip install -e ".[dev]"` after activating the virtual environment). Run the same fast checks used by GitHub Actions:
+
+```bash
+make lint
+make test
+make ci
+```
+
+`make lint` runs Ruff. `make test` runs the unit, contract, enrichment, sink, and data quality tests that do not require external services. `make ci` runs lint and then those fast tests, and fails if either command fails. On Windows without Make, run `.\.venv\Scripts\python.exe -m ruff check src tests scripts` followed by `.\.venv\Scripts\python.exe -m pytest -m "not integration"`.
+
+The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests with Python 3.11. It installs the project from `pyproject.toml` using the `dev` extras and calls `make ci`. It does not start Docker, Kafka, Schema Registry, or Postgres.
+
+Tests marked `integration` are excluded from `make test` and CI. The current integration test checks non-finite measurements against real Postgres. With Postgres available locally, run `make test-integration`; pytest skips that test if Postgres is unavailable. Kafka and Schema Registry integration tests are not part of the current suite.
+
 ## Local Services
 
 | Service | Local URL or port |

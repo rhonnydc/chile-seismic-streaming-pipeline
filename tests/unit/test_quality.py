@@ -91,6 +91,7 @@ def test_shallow_sql_boundary(depth_km: float, is_shallow: bool, expected_invali
         assert connection.execute(sql).fetchone()[0] == expected_invalid
 
 
+@pytest.mark.integration
 def test_non_finite_measurements_are_rejected_by_postgres() -> None:
     """Use a temporary table because SQLite does not share Postgres float ordering."""
     try:

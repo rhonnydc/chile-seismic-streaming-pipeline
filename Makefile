@@ -14,14 +14,16 @@ export POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD P
 
 PYTHON ?= $(firstword $(wildcard .venv/Scripts/python.exe .venv/bin/python) python)
 
-.PHONY: help install format lint test up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink quality-checks test-quality
+.PHONY: help install format lint test test-integration ci up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink quality-checks test-quality
 
 help:
 	@echo "Available commands:"
 	@echo "  make install      Install project dependencies"
 	@echo "  make format       Format Python code"
 	@echo "  make lint         Run linting checks"
-	@echo "  make test         Run tests"
+	@echo "  make test         Run tests that do not require external services"
+	@echo "  make test-integration Run tests that require external services"
+	@echo "  make ci           Run lint and fast tests"
 	@echo "  make up           Start the local Docker Compose stack"
 	@echo "  make down         Stop the local Docker Compose stack"
 	@echo "  make ps           Show local Docker Compose services"
@@ -54,7 +56,14 @@ lint:
 	$(PYTHON) -m ruff check src tests scripts
 
 test:
-	$(PYTHON) -m pytest
+	$(PYTHON) -m pytest -m "not integration"
+
+test-integration:
+	$(PYTHON) -m pytest -m integration
+
+ci:
+	$(MAKE) lint
+	$(MAKE) test
 
 up:
 	docker compose up -d

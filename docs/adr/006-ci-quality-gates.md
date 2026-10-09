@@ -1,9 +1,9 @@
 # 006 — CI quality gates
 
-**Status:** Proposed · **Phase:** 6
+**Status:** Proposed · **Phase:** 7
 
-**Decision.** Run formatting, lint, unit tests, contract tests, and focused Kafka/Postgres integration tests in GitHub Actions. Integration services use disposable local containers and synthetic records; no Kpow license or live earthquake API is required.
+**Decision.** GitHub Actions will run Ruff linting and the fast pytest suite on each push and pull request. The fast suite includes unit, contract, enrichment, sink, and data quality tests that do not require Kafka, Schema Registry, or Postgres. Tests that require real services are marked `integration` and excluded from this initial CI workflow. `make ci` runs the same checks locally.
 
-**Reason.** The pipeline's main failure modes cross process boundaries and cannot be covered by unit tests alone. CI must remain reproducible for contributors without private credentials.
+**Reason.** Fast, service-independent checks give contributors prompt and reproducible feedback without the setup and failure modes of Docker services. Integration tests still provide valuable coverage of process boundaries and can run locally with the required services available.
 
-**Adoption gate.** The workflow fails on a broken contract, delivery path, or sink replay; it passes from a clean checkout with repository defaults.
+**Adoption gate.** The workflow fails when Ruff or any fast test fails and passes from a clean checkout without starting Kafka, Schema Registry, or Postgres. Local integration tests remain available through `make test-integration`; adding service-backed CI coverage is a later decision.
