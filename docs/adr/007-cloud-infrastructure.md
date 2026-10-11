@@ -1,8 +1,8 @@
 # 007 — Optional cloud infrastructure
 
-**Status:** Proposed · **Phase:** 7
+**Status:** Proposed · **Phase:** Later
 
-**Decision.** Add Terraform only after the local pipeline and CI are stable. Keep Compose as the reproducible development path. Isolate cloud credentials, state, and environment-specific settings from application code and committed files.
+**Decision.** Consider Terraform only if a real deployment need emerges after the local pipeline and CI are stable. Keep Compose as the reproducible development path. Isolate cloud credentials, state, and environment-specific settings from application code and committed files.
 
 **Reason.** Provisioning should deploy a proven data flow, not determine its event semantics or block local validation.
 

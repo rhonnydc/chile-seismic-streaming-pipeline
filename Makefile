@@ -1,7 +1,15 @@
 -include .env
+KAFKA_ENRICHED_EARTHQUAKES_TOPIC ?= enriched_earthquakes
 export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC KAFKA_ENRICHED_EARTHQUAKES_TOPIC
+CONSUMER_GROUP_ID ?= seismic-enricher
 export CONSUMER_GROUP_ID
 export FAKE_PRODUCER_EVENT_COUNT FAKE_PRODUCER_INTERVAL_SECONDS
+LIVE_EARTHQUAKE_FEED_URL ?= https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson
+LIVE_PRODUCER_POLL_INTERVAL_SECONDS ?= 60
+LIVE_PRODUCER_MAX_CYCLES ?= 1
+LIVE_PRODUCER_REQUEST_TIMEOUT_SECONDS ?= 10
+export LIVE_EARTHQUAKE_FEED_URL LIVE_PRODUCER_POLL_INTERVAL_SECONDS
+export LIVE_PRODUCER_MAX_CYCLES LIVE_PRODUCER_REQUEST_TIMEOUT_SECONDS
 SCHEMA_REGISTRY_URL ?= http://localhost:8081
 export SCHEMA_REGISTRY_URL
 POSTGRES_HOST ?= localhost
@@ -14,7 +22,7 @@ export POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD P
 
 PYTHON ?= $(firstword $(wildcard .venv/Scripts/python.exe .venv/bin/python) python)
 
-.PHONY: help install format lint test test-integration ci up down ps logs restart clean clean-python docs create-topics produce-fake register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink quality-checks test-quality
+.PHONY: help install format lint test test-integration ci up down ps logs restart clean clean-python docs create-topics produce-fake produce-live register-schemas list-schemas test-contracts reset-raw-topic consume-enrich test-enrichment init-db consume-sink query-db test-sink quality-checks test-quality
 
 help:
 	@echo "Available commands:"
@@ -33,6 +41,7 @@ help:
 	@echo "  make clean-python Remove local Python cache files"
 	@echo "  make create-topics Create raw and enriched topics if needed"
 	@echo "  make produce-fake  Publish simulated earthquakes to Kafka"
+	@echo "  make produce-live  Poll USGS and publish real earthquakes to Kafka"
 	@echo "  make register-schemas Register raw and enriched Avro schemas"
 	@echo "  make list-schemas     List Schema Registry subjects"
 	@echo "  make test-contracts   Run Avro contract and producer tests"
@@ -95,6 +104,9 @@ create-topics:
 
 produce-fake:
 	$(PYTHON) -m seismic_pipeline.producers.fake_earthquake_producer
+
+produce-live:
+	$(PYTHON) -m seismic_pipeline.producers.live_earthquake_producer
 
 register-schemas:
 	$(PYTHON) scripts/register_schemas.py

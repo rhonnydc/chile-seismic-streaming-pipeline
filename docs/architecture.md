@@ -109,20 +109,20 @@ Both Python commands run on the host and connect through `KAFKA_BOOTSTRAP_SERVER
 
 ### Source Data And Internal Model
 
-The internal event model is independent of a particular data provider. The fake generator fills its fields directly. A future `normalize_usgs_event(raw_feature)` could map a USGS GeoJSON feature into the same model:
+The internal event model is independent of a particular data provider. The fake generator fills its fields directly. Phase 8 adds `normalize_usgs_feature(feature)` to map a USGS GeoJSON feature into the same model:
 
 | Internal field | Possible GeoJSON source |
 | --- | --- |
-| `event_id`, `source` | Pipeline identifier derived from feature `id`; provider name (`usgs`) |
+| `event_id`, `source` | `usgs:<feature id>`; provider name (`usgs`) |
 | `source_event_id` | Feature `id` |
 | `magnitude`, `magnitude_type` | `properties.mag` and `properties.magType` |
 | `place`, `status`, `event_type`, `tsunami`, `url` | Other feature `properties` |
 | `event_time_utc`, `updated_at_utc` | `properties.time` and `properties.updated`, converted from epoch milliseconds to UTC |
 | `longitude`, `latitude`, `depth_km` | `geometry.coordinates`, in that order |
 | `ingested_at` | Time the pipeline receives the event |
-| `country`, `region` | Derived from the place or coordinates when possible |
+| `country`, `region` | Inferred from simple place-name rules; otherwise `UNKNOWN` |
 
-This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion remain outside Phase 3.
+This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion were added in later phases.
 
 ## Phase 3 Avro Event Flow
 
@@ -177,3 +177,25 @@ enriched_earthquake_events (Postgres)
 ```
 
 The quality runner reads the analytical table after the sink has stored events. Each query counts rows that violate a rule, including range, required-field, and enrichment-consistency checks. An empty table fails its own check. The runner reports each result and exits with a nonzero code when data is invalid or the checks cannot run. It does not modify rows or participate in Kafka consumption. The [data quality guide](data-quality.md) lists the rules and commands.
+
+## Phase 8 Live Source Flow
+
+```text
+Fake generator -------------------------------> EarthquakeEvent
+                                                  |
+USGS GeoJSON feed -> HTTP polling -> normalizer --+-> raw Avro serializer
+                                                        |
+                                                        v
+                                                raw_earthquakes
+                                                        |
+                                                        v
+                                  enrichment -> enriched Avro -> Postgres sink
+```
+
+The USGS feed is a near-real-time HTTP source, not a WebSocket or push stream. The live producer requests its GeoJSON `features` array once by default or repeatedly at a configurable interval. The default feed is worldwide, and the producer does not filter events by country. The normalizer converts epoch milliseconds to UTC and reads coordinates as longitude, latitude, and depth. It keeps the provider ID in `source_event_id`, derives the stable pipeline ID `usgs:<source_event_id>`, and records when the producer ingested the feature. Simple place-name rules recognize some Chilean regions; other countries and unrecognized regions remain `UNKNOWN` because the normalizer does not derive administrative areas from coordinates. Features with missing critical fields or measurements outside the existing quality ranges are logged and skipped. Non-earthquake feature types are also skipped.
+
+Both producers use the same `EarthquakeEvent` model, `raw_earthquake_event.avsc`, registered `raw_earthquakes-value` subject, Avro serialization settings, and `event_id` Kafka key. The enrichment consumer, enriched schema, Postgres sink, and data quality checks therefore require no source-specific changes. The existing `make produce-fake` remains available; `make produce-live` runs the HTTP polling producer.
+
+During one run, the live producer tracks successfully delivered `source_event_id` values in memory and suppresses repeats from later polls. An empty feed produces no messages. An HTTP error is logged and retried on a later cycle; a one-shot run with a failed request exits with an error. After a restart, the in-memory set is empty and a feature still present in the feed can be published again. Postgres uses `event_id` as its primary key and `ON CONFLICT DO NOTHING` to avoid a second stored row. Because the first row wins, later USGS revisions of the same event do not update it in this phase.
+
+If a real use case emerges, the geographic scope should be decided from its requirements. A Chile-only product could filter geographically; a global product would need a reliable country and administrative-region source. Neither extension is needed for the current learning pipeline.

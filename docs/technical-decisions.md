@@ -10,7 +10,7 @@ Docker Compose will be the primary runtime for development and demos. A reviewer
 
 The first producer generates synthetic seismic events. This keeps development deterministic and prevents the pipeline from depending on API availability, rate limits, or external schema changes.
 
-Live ingestion can be added later as a second producer that publishes to the same raw topic contract.
+Phase 8 added a USGS GeoJSON polling producer that normalizes features into the same `EarthquakeEvent` model and publishes with the existing raw Avro contract. The default feed is worldwide; no Chile-only filter is applied. Country and region inference remains limited to simple Chilean place-name rules, so other locations can be `UNKNOWN`. Broader geographic enrichment should be considered only if a real use case calls for it. [ADR 008](adr/008-live-geojson-ingestion.md) records the behavior and its limits.
 
 ## Kafka is the streaming backbone
 
@@ -24,7 +24,7 @@ Phase 2 published plain JSON. Its retained local messages must be removed before
 
 ## Python owns application logic
 
-Python runs the fake producer, Avro enrichment consumer, and separate Postgres sink consumer. The sink maps enriched events to SQL independently of Kafka and commits each database transaction before its consumer commits the Kafka offset.
+Python runs the fake and live producers, Avro enrichment consumer, and separate Postgres sink consumer. The sink maps enriched events to SQL independently of Kafka and commits each database transaction before its consumer commits the Kafka offset.
 
 ## Postgres is the first analytical sink
 
@@ -36,7 +36,7 @@ Kpow inspects topics, Avro messages, Schema Registry subjects, the consumer grou
 
 ## Terraform is optional infrastructure
 
-Terraform belongs in the roadmap, but it must not block the local pipeline. The local Docker Compose path remains the source of truth for the MVP.
+Terraform is a future option if the pipeline develops a real deployment need. It is outside Phase 8 and does not block the local Docker Compose path.
 
 ## Tools intentionally excluded from the MVP
 

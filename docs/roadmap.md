@@ -24,10 +24,18 @@ Consume Avro events from `raw_earthquakes`, apply Python enrichment, and publish
 
 Consume Avro events from `enriched_earthquakes` with a separate consumer group and persist them idempotently in Postgres. Expose simple analytical SQL queries. Aggregate metrics remain outside Phase 5.
 
-## Phase 6: Data Quality and Testing
+## Phase 6: Data Quality
 
-Add data quality checks, unit tests, integration tests, and CI checks with GitHub Actions.
+Add data quality checks over the Postgres analytical table and a command that reports pass or fail.
 
-## Phase 7: Cloud-ready Layer
+## Phase 7: Testing and CI
 
-Add Terraform as an optional infrastructure layer without blocking local execution.
+Run fast unit and contract tests with Ruff through `make ci` and GitHub Actions. Keep service-dependent integration tests separate.
+
+## Phase 8: Live Earthquake Producer
+
+Poll a configurable USGS GeoJSON feed, normalize usable earthquake features into the existing `EarthquakeEvent` model, and publish them as Avro to `raw_earthquakes`. Preserve the fake producer and downstream contracts. Deduplicate within one process run; country and region inference remains intentionally limited.
+
+## Future: Optional Cloud Infrastructure
+
+Consider Terraform only after the local pipeline has a concrete deployment need. It is not part of Phase 8.

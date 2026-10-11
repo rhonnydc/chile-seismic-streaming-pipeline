@@ -2,7 +2,7 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table. Phase 8 adds a USGS GeoJSON polling producer that uses the same raw contract.
 
 ## Phase 1 Scope
 
@@ -14,7 +14,7 @@ Phase 1 includes:
 - Postgres as the local analytical database.
 - Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
 
-The current flow is: fake producer -> Avro `raw_earthquakes` -> Python enrichment consumer -> Avro `enriched_earthquakes` -> Python Postgres sink consumer -> `enriched_earthquake_events`.
+The current flow is: fake producer or USGS polling producer -> Avro `raw_earthquakes` -> Python enrichment consumer -> Avro `enriched_earthquakes` -> Python Postgres sink consumer -> `enriched_earthquake_events`.
 
 ## Repository Layout
 
@@ -131,7 +131,7 @@ Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/
 
 Open Kpow at `http://localhost:3000`, inspect `raw_earthquakes` for Avro messages keyed by `event_id`, and check that the subject `raw_earthquakes-value` appears in Schema Registry. You can also verify the subject directly with `curl http://localhost:8081/subjects` (use `curl.exe` in PowerShell).
 
-The producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. Live ingestion is outside the current implementation.
+The fake producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. The live producer described below builds the same model from USGS GeoJSON.
 
 ## Phase 4: Consume and Enrich
 
@@ -230,6 +230,28 @@ make ci
 The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests with Python 3.11. It installs the project from `pyproject.toml` using the `dev` extras and calls `make ci`. It does not start Docker, Kafka, Schema Registry, or Postgres.
 
 Tests marked `integration` are excluded from `make test` and CI. The current integration test checks non-finite measurements against real Postgres. With Postgres available locally, run `make test-integration`; pytest skips that test if Postgres is unavailable. Kafka and Schema Registry integration tests are not part of the current suite.
+
+## Phase 8: Live Earthquake Producer
+
+The live producer **polls** the USGS GeoJSON feed. USGS does not push events to Kafka: each HTTP response is normalized into `EarthquakeEvent`, serialized with the already registered raw Avro schema, and published to `raw_earthquakes`. The enrichment consumer and Postgres sink use their existing contracts unchanged.
+
+For a one-shot run, copy `.env.example` to `.env` if this is a new setup; otherwise add the four `LIVE_` settings from the template to your existing `.env`. Then run:
+
+```bash
+make up
+make ps
+make register-schemas
+make create-topics
+make produce-live
+```
+
+The default feed is USGS `all_hour.geojson`, the request timeout is 10 seconds, and `LIVE_PRODUCER_MAX_CYCLES=1` makes one HTTP request. Set `LIVE_PRODUCER_MAX_CYCLES=0` for continuous polling and `LIVE_PRODUCER_POLL_INTERVAL_SECONDS` to control the delay between requests. `LIVE_EARTHQUAKE_FEED_URL` selects another GeoJSON feed with the same feature shape. With an empty feed, the producer logs that no events were returned and exits successfully. Invalid features are logged and skipped. If every HTTP request fails, it exits with an error; with multiple cycles, it retries after the configured interval.
+
+Each published message has `source="usgs"`, `source_event_id` equal to the USGS feature ID, and a stable `event_id` and Kafka key of `usgs:<source_event_id>`. The producer keeps published source IDs in memory to suppress repeats during one run. A restart can publish an event again. Postgres uses `event_id` as a primary key with `ON CONFLICT DO NOTHING`, so a replay does not add a second row; that policy also means later USGS revisions do not replace the first stored row. Features outside the current data-quality ranges are skipped rather than changed silently.
+
+The default USGS feed covers the world; the producer does **not** filter events to Chile. Its location rules are deliberately limited to Chilean names in `properties.place`. A place such as `17 km SSW of Oasis, CA` therefore produces `country="UNKNOWN"` and `region="UNKNOWN"`, even though its coordinates are valid. The normalizer does not interpret US state abbreviations or use coordinates to look up administrative areas. If the pipeline gains a real use case, we can decide whether it needs Chile-only geographic filtering or reliable worldwide country and region enrichment; that scope may justify a structured location source or geocoding. Neither is part of Phase 8.
+
+In Kpow, check `raw_earthquakes` for Avro values with `source=usgs`, keys beginning `usgs:`, and the existing `raw_earthquakes-value` subject. To continue through the pipeline, run `make init-db`, start `make consume-enrich` and `make consume-sink` in separate terminals, and then run `make quality-checks` after events are stored. For a direct PowerShell run without Make, use `.\.venv\Scripts\python.exe -m seismic_pipeline.producers.live_earthquake_producer`; direct Python uses process environment variables or built-in defaults, not `.env` automatically.
 
 ## Local Services
 
