@@ -100,3 +100,10 @@ docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT event
 ```
 
 Run `make query-db` (or `sql/analytics_queries.sql` through `psql`) for the four analytical views of the stored events. A zero-lag group means its offsets caught up with Kafka at that moment; compare it with Postgres rows and sink logs to verify persistence. Replaying an event may log `inserted=False` because `ON CONFLICT (event_id) DO NOTHING` kept the existing row. If a database write or deserialization fails, the affected offset stays uncommitted and the consumer exits; inspect its error log before restarting.
+
+## Phase 9 Recovery Evidence
+
+See [Fault Recovery and Replay Testing](recovery-testing.md) for reproducible local steps and
+observed offsets, Python logs, and SQL results for consumer restarts, Postgres failure, and
+replays across both commit boundaries. Kpow can cross-check group membership and lag, while SQL
+is needed to verify that a replay leaves one Postgres row per `event_id`.

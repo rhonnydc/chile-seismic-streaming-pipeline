@@ -311,6 +311,7 @@ make clean
 - [Data Contracts](docs/data-contracts.md)
 - [Data Quality Checks](docs/data-quality.md)
 - [Observability](docs/observability.md)
+- [Fault Recovery and Replay Testing](docs/recovery-testing.md)
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)
 - [Technical Decisions](docs/technical-decisions.md)

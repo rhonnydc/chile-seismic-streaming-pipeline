@@ -1,10 +1,15 @@
 """Check consumer delivery and offset behavior without connecting to Kafka."""
 
+from datetime import UTC, datetime
+from random import Random
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from seismic_pipeline.consumers import enriching_consumer as consumer_module
+from seismic_pipeline.producers.fake_earthquake_generator import generate_fake_earthquake
+from seismic_pipeline.sinks.postgres_sink import INSERT_SQL, persist_event
 
 
 class FakeMessage:
@@ -27,6 +32,7 @@ class FakeMessage:
 class FakeConsumer:
     instances: list["FakeConsumer"] = []
     next_message: FakeMessage | None = None
+    crash_before_commit = False
 
     def __init__(self, config: dict[str, object]) -> None:
         self.config = config
@@ -49,6 +55,9 @@ class FakeConsumer:
 
     def commit(self, **kwargs: object) -> None:
         assert FakeProducer.delivery_reported is True
+        if self.crash_before_commit:
+            FakeConsumer.crash_before_commit = False
+            raise RuntimeError("injected crash before raw offset commit")
         self.commits.append(kwargs)
 
     def close(self) -> None:
@@ -116,6 +125,7 @@ def setup_clients(monkeypatch: pytest.MonkeyPatch) -> FakeMessage:
     FakeProducer.instances.clear()
     FakeSerializer.instances.clear()
     FakeConsumer.next_message = message
+    FakeConsumer.crash_before_commit = False
     FakeProducer.delivery_error = None
     FakeProducer.delivery_reported = False
     FakeDeserializer.fail = False
@@ -187,3 +197,52 @@ def test_deserialization_failure_does_not_publish_or_commit(setup_clients: FakeM
     assert FakeProducer.instances[0].messages == []
     assert FakeConsumer.instances[0].commits == []
     assert FakeConsumer.instances[0].closed is True
+
+
+def test_crash_after_enriched_delivery_replays_raw_and_sink_deduplicates(
+    setup_clients: FakeMessage,
+) -> None:
+    raw_event = generate_fake_earthquake(
+        rng=Random(0), now=datetime(2026, 10, 23, 12, tzinfo=UTC)
+    ).to_dict()
+    raw_event["event_id"] = "phase9-enricher-crash"
+    raw_event["source_event_id"] = raw_event["event_id"]
+    message = FakeMessage(raw_event)
+    FakeConsumer.next_message = message
+    FakeConsumer.crash_before_commit = True
+
+    with pytest.raises(RuntimeError, match="injected crash before raw offset commit"):
+        run_consumer()
+
+    assert FakeConsumer.instances[0].commits == []
+    assert FakeConsumer.instances[0].closed is True
+
+    with pytest.raises(KeyboardInterrupt):
+        run_consumer()
+
+    assert FakeConsumer.instances[1].commits == [{"message": message, "asynchronous": False}]
+    published_events = [serializer.events[0] for serializer in FakeSerializer.instances]
+    assert [event["event_id"] for event in published_events] == [
+        "phase9-enricher-crash",
+        "phase9-enricher-crash",
+    ]
+    assert [producer.messages[0]["key"] for producer in FakeProducer.instances] == [
+        b"phase9-enricher-crash",
+        b"phase9-enricher-crash",
+    ]
+
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    stored_ids: set[str] = set()
+
+    def execute(sql: str, row: tuple[object, ...]) -> None:
+        assert sql == INSERT_SQL
+        event_id = row[0]
+        assert isinstance(event_id, str)
+        cursor.rowcount = int(event_id not in stored_ids)
+        stored_ids.add(event_id)
+
+    cursor.execute.side_effect = execute
+    assert [persist_event(connection, event) for event in published_events] == [True, False]
+    assert stored_ids == {"phase9-enricher-crash"}
+    assert connection.commit.call_count == 2
