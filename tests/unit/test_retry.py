@@ -4,9 +4,9 @@ import logging
 
 import psycopg
 import pytest
-from seismic_pipeline.consumers.retry import retry_recoverable
 
 from seismic_pipeline.consumers.error_policy import FailureStage, InvalidMessageError
+from seismic_pipeline.consumers.retry import retry_recoverable
 
 
 def test_transient_failure_succeeds_on_third_attempt(caplog: pytest.LogCaptureFixture) -> None:
