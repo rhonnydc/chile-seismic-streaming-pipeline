@@ -149,7 +149,7 @@ Fake producer
 
 The consumer runs on the host and uses the same external Kafka listener (`localhost:9092`) and Schema Registry endpoint (`http://localhost:8081`) as the fake producer. `AvroDeserializer` reads the schema ID carried with each raw value and resolves it through Schema Registry. The processing function copies the 18 raw fields and adds six derived fields. `AvroSerializer` writes the result using the separately registered `enriched_earthquakes-value` contract. The registration and topic-creation scripts now handle both topics.
 
-The `seismic-enricher` consumer group tracks its position in each raw topic partition. Automatic commits are disabled. For each input, the consumer waits for an enriched delivery report and then commits the source offset synchronously. If output delivery fails, or enrichment raises an error, it does not commit that input. A crash after output delivery but before the commit can cause the same input to be published again after restart, so the current delivery boundary is at least once. This simple phase has no dead-letter topic, metrics stream, or Postgres sink.
+The `seismic-enricher` consumer group tracks its position in each raw topic partition. Automatic commits are disabled. For each valid input, the consumer waits for an enriched delivery report and then commits the source offset synchronously. If output delivery fails, it does not commit that input. A crash after output delivery but before the commit can publish the same input again after restart, so this boundary is at least once. Phase 10 adds selective error handling below; the Phase 4 implementation originally stopped on all invalid inputs.
 
 A new consumer group starts at the earliest available raw offset; an existing group resumes from its committed offsets. Kpow can show the group, per-partition committed offsets, and lag, while its topic browser can show the original and enriched messages. The [observability guide](observability.md) lists the specific checks.
 
@@ -166,7 +166,25 @@ The sink is a second Python consumer with its own `seismic-postgres-sink` group.
 
 The versioned [`sql/init.sql`](../sql/init.sql) creates `enriched_earthquake_events` with the 24 enriched fields and a database-generated `stored_at_utc`. Avro timestamp strings become `TIMESTAMPTZ`, `event_date_utc` becomes `DATE`, and Avro doubles become `DOUBLE PRECISION`. Only `magnitude_type` and `url` are nullable under the current contract. The [`sql/analytics_queries.sql`](../sql/analytics_queries.sql) file queries regional counts, average magnitude, high-severity events, and average ingestion latency.
 
-Each event is inserted in one database transaction with `event_id` as the primary key and `ON CONFLICT (event_id) DO NOTHING`. The first stored version wins if the same ID appears again. After the database commit succeeds, the consumer commits that Kafka message's offset synchronously. A database failure leaves the offset uncommitted. A crash after the database commit but before the offset commit can cause a replay, which the primary key handles without adding another row. This is at-least-once delivery with an idempotent sink, not an atomic transaction across Kafka and Postgres. The consumer stops on an invalid record or write failure so the affected offset is available for investigation and retry.
+Each event is inserted in one database transaction with `event_id` as the primary key and `ON CONFLICT (event_id) DO NOTHING`. The first stored version wins if the same ID appears again. After the database commit succeeds, the consumer commits that Kafka message's offset synchronously. A database failure leaves the offset uncommitted. A crash after the database commit but before the offset commit can cause a replay, which the primary key handles without adding another row. This is at-least-once delivery with an idempotent sink, not an atomic transaction across Kafka and Postgres. Phase 10 adds bounded retry for lost database connections and selective DLQ routing for invalid inputs.
+
+## Phase 10 Error Flow
+
+```text
+raw_earthquakes (Avro) -> seismic-enricher -> enriched_earthquakes (Avro)
+                                |                         |
+                         invalid input               seismic-postgres-sink -> Postgres
+                                |                         |
+                                +-> dead_letter_earthquakes <- invalid input
+```
+
+Both consumers classify failures before deciding whether to retry, send an
+input to the shared JSON DLQ, or stop. A DLQ envelope holds the original Kafka
+bytes in base64 along with the stage, source topic, partition, offset, and
+error. It does not alter the raw or enriched Avro contracts. Successful DLQ
+delivery precedes the original source offset commit; a crash between those
+actions may duplicate the DLQ entry. See [Phase 10 operations](retry-dead-letter.md)
+and [ADR 009](adr/009-retry-and-dead-letter.md) for the exact policy.
 
 ## Phase 6 Data Quality Flow
 

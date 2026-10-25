@@ -12,3 +12,4 @@ Records capture one implementation choice and its operational consequence. **Acc
 | [006 — CI quality gates](006-ci-quality-gates.md) | 6 | Proposed |
 | [007 — Optional cloud infrastructure](007-cloud-infrastructure.md) | Later | Proposed |
 | [008 — Live GeoJSON ingestion](008-live-geojson-ingestion.md) | 8 | Accepted |
+| [009 — Bounded retry and dead-letter routing](009-retry-and-dead-letter.md) | 10 | Accepted |

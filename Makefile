@@ -1,6 +1,7 @@
 -include .env
 KAFKA_ENRICHED_EARTHQUAKES_TOPIC ?= enriched_earthquakes
-export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC KAFKA_ENRICHED_EARTHQUAKES_TOPIC
+KAFKA_DEAD_LETTER_TOPIC ?= dead_letter_earthquakes
+export KAFKA_BOOTSTRAP_SERVERS KAFKA_RAW_EARTHQUAKES_TOPIC KAFKA_ENRICHED_EARTHQUAKES_TOPIC KAFKA_DEAD_LETTER_TOPIC
 CONSUMER_GROUP_ID ?= seismic-enricher
 export CONSUMER_GROUP_ID
 export FAKE_PRODUCER_EVENT_COUNT FAKE_PRODUCER_INTERVAL_SECONDS
@@ -39,7 +40,7 @@ help:
 	@echo "  make restart      Restart the local Docker Compose stack"
 	@echo "  make clean        Stop the stack and remove local volumes"
 	@echo "  make clean-python Remove local Python cache files"
-	@echo "  make create-topics Create raw and enriched topics if needed"
+	@echo "  make create-topics Create raw, enriched, and dead-letter topics if needed"
 	@echo "  make produce-fake  Publish simulated earthquakes to Kafka"
 	@echo "  make produce-live  Poll USGS and publish real earthquakes to Kafka"
 	@echo "  make register-schemas Register raw and enriched Avro schemas"

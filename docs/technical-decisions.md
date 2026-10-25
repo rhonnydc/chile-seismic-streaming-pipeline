@@ -14,7 +14,10 @@ Phase 8 added a USGS GeoJSON polling producer that normalizes features into the 
 
 ## Kafka is the streaming backbone
 
-Kafka carries the `raw_earthquakes` input stream and the `enriched_earthquakes` output stream. Metrics and failed-event topics belong to later phases.
+Kafka carries the `raw_earthquakes` input stream, the `enriched_earthquakes`
+output stream, and the Phase 10 `dead_letter_earthquakes` error stream. An
+aggregate metrics topic belongs to a later phase. [ADR 009](adr/009-retry-and-dead-letter.md)
+records the DLQ and retry decision.
 
 ## Event contracts are first-class artifacts
 

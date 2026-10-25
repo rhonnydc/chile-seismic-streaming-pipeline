@@ -3,7 +3,7 @@
 | Script | Operation |
 | --- | --- |
 | `register_schemas.py` | Register raw and enriched Avro value schemas in Schema Registry. |
-| `create_topics.py` | Create `raw_earthquakes` and `enriched_earthquakes` if missing. |
+| `create_topics.py` | Create `raw_earthquakes`, `enriched_earthquakes`, and `dead_letter_earthquakes` if missing. |
 | `reset_raw_topic.py` | Delete and recreate the disposable local raw topic during the JSON-to-Avro cutover. |
 
 From the repository root, after starting the Docker Compose stack:

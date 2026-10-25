@@ -80,7 +80,7 @@ After registering both schemas, creating both topics, and publishing fake raw ev
 4. **Offsets:** The committed offset for a partition is the next record the group would read there. It advances after the corresponding enriched delivery succeeds.
 5. **Lag:** Compare the partition's end offset with its committed offset. Lag should fall as the consumer processes queued raw events; if more raw events arrive, it can rise again.
 
-The consumer logs `event_id`, source partition, and source offset after each successful commit. If processing stops on a bad input or output delivery failure, that input is not committed; inspect the logs and topic messages before restarting. This phase has no dead-letter topic or aggregate metrics.
+The consumer logs `event_id`, source partition, and source offset after each successful commit. Phase 4 stopped without committing on an invalid input or output delivery failure. Phase 10 now isolates proven invalid inputs in a DLQ after a delivery acknowledgement; unknown and infrastructure failures still stop with the offset pending.
 
 ## Phase 5 Sink Checks
 
@@ -99,7 +99,7 @@ docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT COUNT
 docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT event_id, region, magnitude, severity_level, stored_at_utc FROM enriched_earthquake_events ORDER BY stored_at_utc DESC LIMIT 10;"
 ```
 
-Run `make query-db` (or `sql/analytics_queries.sql` through `psql`) for the four analytical views of the stored events. A zero-lag group means its offsets caught up with Kafka at that moment; compare it with Postgres rows and sink logs to verify persistence. Replaying an event may log `inserted=False` because `ON CONFLICT (event_id) DO NOTHING` kept the existing row. If a database write or deserialization fails, the affected offset stays uncommitted and the consumer exits; inspect its error log before restarting.
+Run `make query-db` (or `sql/analytics_queries.sql` through `psql`) for the four analytical views of the stored events. A zero-lag group means its offsets caught up with Kafka at that moment; compare it with Postgres rows and sink logs to verify persistence. Replaying an event may log `inserted=False` because `ON CONFLICT (event_id) DO NOTHING` kept the existing row. Phase 10 retries known connection failures and isolates proven invalid inputs; other failures leave the offset uncommitted and stop the consumer.
 
 ## Phase 9 Recovery Evidence
 
@@ -107,3 +107,12 @@ See [Fault Recovery and Replay Testing](recovery-testing.md) for reproducible lo
 observed offsets, Python logs, and SQL results for consumer restarts, Postgres failure, and
 replays across both commit boundaries. Kpow can cross-check group membership and lag, while SQL
 is needed to verify that a replay leaves one Postgres row per `event_id`.
+
+## Phase 10 DLQ Checks
+
+See [Retry and Dead-Letter Handling](retry-dead-letter.md) for the shared
+`dead_letter_earthquakes` JSON contract, the Kpow Data → Inspect procedure,
+CLI offset checks, and the controlled two-consumer run. Compare the DLQ
+record's source topic, partition, and offset with the affected group's
+committed position. Logs distinguish a bounded retry, a DLQ delivery, and a
+consumer stopping on an unresolved infrastructure or unexpected error.

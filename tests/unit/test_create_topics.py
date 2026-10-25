@@ -85,7 +85,25 @@ def test_creates_enriched_topic_when_missing(monkeypatch: pytest.MonkeyPatch) ->
     assert client.future.waited is True
 
 
-def test_main_requests_both_topics(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_creates_dead_letter_topic_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    FakeAdminClient.instances.clear()
+    FakeAdminClient.existing_topics = {}
+    monkeypatch.setattr(create_topics, "AdminClient", FakeAdminClient)
+
+    created = create_topics.ensure_dead_letter_topic(
+        bootstrap_servers="localhost:9092", topic="dead_letter_earthquakes"
+    )
+
+    client = FakeAdminClient.instances[0]
+    assert created is True
+    assert len(client.created_topics) == 1
+    assert client.created_topics[0].topic == "dead_letter_earthquakes"
+    assert client.created_topics[0].num_partitions == 3
+    assert client.created_topics[0].replication_factor == 1
+    assert client.future.waited is True
+
+
+def test_main_requests_all_three_topics(monkeypatch: pytest.MonkeyPatch) -> None:
     requests: list[tuple[str, str]] = []
 
     def record_topic(*, bootstrap_servers: str, topic: str) -> bool:
@@ -95,11 +113,14 @@ def test_main_requests_both_topics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     monkeypatch.setenv("KAFKA_RAW_EARTHQUAKES_TOPIC", "raw_earthquakes")
     monkeypatch.setenv("KAFKA_ENRICHED_EARTHQUAKES_TOPIC", "enriched_earthquakes")
+    monkeypatch.setenv("KAFKA_DEAD_LETTER_TOPIC", "dead_letter_earthquakes")
     monkeypatch.setattr(create_topics, "ensure_raw_earthquakes_topic", record_topic)
     monkeypatch.setattr(create_topics, "ensure_enriched_earthquakes_topic", record_topic)
+    monkeypatch.setattr(create_topics, "ensure_dead_letter_topic", record_topic)
 
     assert create_topics.main() == 0
     assert requests == [
         ("localhost:9092", "raw_earthquakes"),
         ("localhost:9092", "enriched_earthquakes"),
+        ("localhost:9092", "dead_letter_earthquakes"),
     ]

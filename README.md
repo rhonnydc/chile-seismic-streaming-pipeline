@@ -2,7 +2,7 @@
 
 Local-first streaming data pipeline for Chilean seismic events.
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table. Phase 8 adds a USGS GeoJSON polling producer that uses the same raw contract.
+The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table. Phase 8 adds a USGS GeoJSON polling producer that uses the same raw contract. Phase 9 verifies recovery and replay, while Phase 10 adds bounded retries and a shared dead-letter topic for proven invalid inputs.
 
 ## Phase 1 Scope
 
@@ -120,12 +120,11 @@ After `make up` and `make ps`, register and check the contract before producing:
 make register-schemas
 make list-schemas
 make test-contracts
-make reset-raw-topic
 make create-topics
 make produce-fake
 ```
 
-`make reset-raw-topic` deletes and recreates the disposable local topic. Run it before the first Avro publication if Phase 2 JSON messages may still be retained; it is unnecessary for an empty new topic. The producer requires the registered schema and does not register it automatically.
+`make reset-raw-topic` deletes and recreates the disposable local topic. It was only needed for the initial Phase 2 JSON-to-Avro cutover if those old messages were retained; do not use it for routine Phase 10 testing. The producer requires the registered schema and does not register it automatically.
 
 Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/contracts tests/unit/test_fake_earthquake_producer.py`, `python scripts/reset_raw_topic.py` when cutting over from JSON, `python scripts/create_topics.py`, and `python -m seismic_pipeline.producers.fake_earthquake_producer`. Direct Python commands read process environment variables or use local defaults; Make loads `.env` for them.
 
@@ -164,7 +163,7 @@ docker compose up -d
 
 The direct Python commands use process environment variables or their local defaults; unlike Make, they do not load `.env` automatically. Set `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, `KAFKA_RAW_EARTHQUAKES_TOPIC`, `KAFKA_ENRICHED_EARTHQUAKES_TOPIC`, and `CONSUMER_GROUP_ID` in the shell if you change their defaults.
 
-In Kpow at `http://localhost:3000`, confirm that both topics exist, `enriched_earthquakes` receives records with derived fields and `event_id` keys, and the `seismic-enricher` group has committed offsets on `raw_earthquakes`. Its lag should decrease as records are processed. An invalid raw record stops this simple consumer without committing that record; this phase does not add a dead-letter topic.
+In Kpow at `http://localhost:3000`, confirm that the raw and enriched topics exist, `enriched_earthquakes` receives records with derived fields and `event_id` keys, and the `seismic-enricher` group has committed offsets on `raw_earthquakes`. Its lag should decrease as records are processed. Phase 10 adds the selective DLQ route described below; ambiguous failures still leave the input uncommitted.
 
 ## Phase 5: Postgres Analytical Sink
 
@@ -253,6 +252,17 @@ The default USGS feed covers the world; the producer does **not** filter events 
 
 In Kpow, check `raw_earthquakes` for Avro values with `source=usgs`, keys beginning `usgs:`, and the existing `raw_earthquakes-value` subject. To continue through the pipeline, run `make init-db`, start `make consume-enrich` and `make consume-sink` in separate terminals, and then run `make quality-checks` after events are stored. For a direct PowerShell run without Make, use `.\.venv\Scripts\python.exe -m seismic_pipeline.producers.live_earthquake_producer`; direct Python uses process environment variables or built-in defaults, not `.env` automatically.
 
+## Phase 10: Retry and Dead-Letter Handling
+
+`make create-topics` also creates `dead_letter_earthquakes`. Both consumers
+retry a small set of known transient failures up to three total attempts.
+Clearly invalid Avro framing and validated date/time defects go to the shared
+DLQ as JSON, with original Kafka bytes and source coordinates. The source
+offset advances only after a successful DLQ delivery report. Unknown failures
+and persistent infrastructure failures stop the consumer with the offset
+pending. See [Phase 10 retry and DLQ operations](docs/retry-dead-letter.md)
+for the exact contract, Kpow procedure, local evidence, and limitations.
+
 ## Local Services
 
 | Service | Local URL or port |
@@ -312,6 +322,7 @@ make clean
 - [Data Quality Checks](docs/data-quality.md)
 - [Observability](docs/observability.md)
 - [Fault Recovery and Replay Testing](docs/recovery-testing.md)
+- [Retry and Dead-Letter Handling](docs/retry-dead-letter.md)
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)
 - [Technical Decisions](docs/technical-decisions.md)

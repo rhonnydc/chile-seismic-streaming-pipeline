@@ -6,10 +6,10 @@ Topic names use lowercase snake case and describe the event stream, not the prod
 
 | Topic | Description |
 | --- | --- |
-| `raw_earthquakes` | Simulated seismic events; a live source is planned. |
+| `raw_earthquakes` | Simulated and USGS seismic events. |
 | `enriched_earthquakes` | Raw event fields plus six derived fields. |
 | `seismic_metrics` | Planned aggregate metrics stream. |
-| `dead_letter_earthquakes` | Planned failed-event stream. |
+| `dead_letter_earthquakes` | JSON envelopes for isolated invalid inputs from both consumers. |
 
 ## Schemas
 
@@ -59,6 +59,7 @@ Environment variables use uppercase snake case and include the owning system whe
 KAFKA_BOOTSTRAP_SERVERS
 KAFKA_RAW_EARTHQUAKES_TOPIC
 KAFKA_ENRICHED_EARTHQUAKES_TOPIC
+KAFKA_DEAD_LETTER_TOPIC
 CONSUMER_GROUP_ID
 SCHEMA_REGISTRY_URL
 POSTGRES_HOST

@@ -1,4 +1,4 @@
-"""Create the raw and enriched earthquake topics when they do not exist."""
+"""Create the raw, enriched, and dead-letter topics when they do not exist."""
 
 import logging
 import os
@@ -48,8 +48,13 @@ def ensure_enriched_earthquakes_topic(*, bootstrap_servers: str, topic: str) -> 
     return _ensure_topic(bootstrap_servers=bootstrap_servers, topic=topic)
 
 
+def ensure_dead_letter_topic(*, bootstrap_servers: str, topic: str) -> bool:
+    """Create the dead-letter topic if needed."""
+    return _ensure_topic(bootstrap_servers=bootstrap_servers, topic=topic)
+
+
 def main() -> int:
-    """Create both topics using local settings from environment variables."""
+    """Create all three topics using local settings from environment variables."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
         bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
@@ -60,6 +65,10 @@ def main() -> int:
         ensure_enriched_earthquakes_topic(
             bootstrap_servers=bootstrap_servers,
             topic=os.getenv("KAFKA_ENRICHED_EARTHQUAKES_TOPIC", "enriched_earthquakes"),
+        )
+        ensure_dead_letter_topic(
+            bootstrap_servers=bootstrap_servers,
+            topic=os.getenv("KAFKA_DEAD_LETTER_TOPIC", "dead_letter_earthquakes"),
         )
     except (KafkaException, TimeoutError, ValueError) as error:
         LOGGER.error("Could not create topic: %s", error)
