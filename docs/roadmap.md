@@ -52,6 +52,15 @@ Postgres, or DLQ delivery as appropriate. Deterministic tests, `make ci`, and
 controlled local Kafka/Postgres/Kpow checks are complete. See
 [retry and dead-letter operations](retry-dead-letter.md) and [ADR 009](adr/009-retry-and-dead-letter.md).
 
+## Phase 11: Integration and Resilience Testing
+
+Use a disposable Compose project to run Kafka, Schema Registry, and Postgres
+integration tests from a clean checkout. Verify the end-to-end Avro pipeline,
+idempotent sink replay, DLQ source metadata and bytes, and recovery after a
+controlled Postgres outage. Keep `make ci` fast; run integration tests through
+`make test-integration` locally and in a separate GitHub Actions job. See
+[integration testing](integration-testing.md) for commands, evidence, and limits.
+
 ## Future: Optional Cloud Infrastructure
 
 Consider Terraform only after the local pipeline has a concrete deployment need.

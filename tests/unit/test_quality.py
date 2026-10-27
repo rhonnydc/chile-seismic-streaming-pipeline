@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import psycopg
@@ -94,17 +95,28 @@ def test_shallow_sql_boundary(depth_km: float, is_shallow: bool, expected_invali
 @pytest.mark.integration
 def test_non_finite_measurements_are_rejected_by_postgres() -> None:
     """Use a temporary table because SQLite does not share Postgres float ordering."""
+    run_id = os.getenv("INTEGRATION_RUN_ID", "")
+    project = os.getenv("INTEGRATION_COMPOSE_PROJECT", "")
+    compose_file = Path(os.getenv("INTEGRATION_COMPOSE_FILE", ""))
+    expected_compose_file = Path(__file__).resolve().parents[2] / "docker-compose.integration.yml"
+    if (
+        not run_id
+        or project != f"seismic-it-{run_id}"
+        or compose_file.resolve() != expected_compose_file.resolve()
+        or os.getenv("POSTGRES_DB") != "seismic_integration"
+    ):
+        pytest.fail("Run Postgres integration tests through scripts/run_integration.py")
     try:
         connection = psycopg.connect(
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            dbname=os.getenv("POSTGRES_DB", "seismic"),
-            user=os.getenv("POSTGRES_USER", "seismic_user"),
-            password=os.getenv("POSTGRES_PASSWORD", "seismic_password"),
-            connect_timeout=1,
+            host=os.environ["POSTGRES_HOST"],
+            port=int(os.environ["POSTGRES_PORT"]),
+            dbname=os.environ["POSTGRES_DB"],
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"],
+            connect_timeout=3,
         )
     except psycopg.OperationalError as error:
-        pytest.skip(f"Postgres unavailable: {error}")
+        pytest.fail(f"Integration Postgres unavailable: {error}")
 
     with connection:
         with connection.cursor() as cursor:

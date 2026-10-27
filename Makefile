@@ -31,7 +31,7 @@ help:
 	@echo "  make format       Format Python code"
 	@echo "  make lint         Run linting checks"
 	@echo "  make test         Run tests that do not require external services"
-	@echo "  make test-integration Run tests that require external services"
+	@echo "  make test-integration Start isolated services, run integration tests, and clean up"
 	@echo "  make ci           Run lint and fast tests"
 	@echo "  make up           Start the local Docker Compose stack"
 	@echo "  make down         Stop the local Docker Compose stack"
@@ -69,7 +69,7 @@ test:
 	$(PYTHON) -m pytest -m "not integration"
 
 test-integration:
-	$(PYTHON) -m pytest -m integration
+	$(PYTHON) scripts/run_integration.py
 
 ci:
 	$(MAKE) lint

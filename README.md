@@ -212,7 +212,7 @@ make test-quality
 make quality-checks
 ```
 
-`quality-checks` prints PASS/FAIL for each rule and a summary. It exits with code `1` if any data rule fails (including an empty table), or `2` if the checks cannot run. Make loads the existing Postgres settings from `.env`. On Windows without Make, use `.\.venv\Scripts\python.exe -m pytest tests/unit/test_quality.py` and `.\.venv\Scripts\python.exe -m seismic_pipeline.quality.runner`; direct Python commands use process environment variables or local defaults. See [Data Quality Checks](docs/data-quality.md) for the rules and report interpretation.
+`quality-checks` prints PASS/FAIL for each rule and a summary. It exits with code `1` if any data rule fails (including an empty table), or `2` if the checks cannot run. Make loads the existing Postgres settings from `.env`. On Windows without Make, use `.\.venv\Scripts\python.exe -m pytest tests/unit/test_quality.py -m "not integration"` for the fast tests and `.\.venv\Scripts\python.exe -m seismic_pipeline.quality.runner` for the checks; direct Python commands use process environment variables or local defaults. See [Data Quality Checks](docs/data-quality.md) for the rules and report interpretation.
 
 ## Phase 7: Testing and CI
 
@@ -226,9 +226,9 @@ make ci
 
 `make lint` runs Ruff. `make test` runs the unit, contract, enrichment, sink, and data quality tests that do not require external services. `make ci` runs lint and then those fast tests, and fails if either command fails. On Windows without Make, run `.\.venv\Scripts\python.exe -m ruff check src tests scripts` followed by `.\.venv\Scripts\python.exe -m pytest -m "not integration"`.
 
-The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests with Python 3.11. It installs the project from `pyproject.toml` using the `dev` extras and calls `make ci`. It does not start Docker, Kafka, Schema Registry, or Postgres.
+The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests with Python 3.11. Its `checks` job installs the project with the `dev` extras and calls `make ci`. A separate `integration` job starts isolated Kafka, Schema Registry, and Postgres through `make test-integration`.
 
-Tests marked `integration` are excluded from `make test` and CI. The current integration test checks non-finite measurements against real Postgres. With Postgres available locally, run `make test-integration`; pytest skips that test if Postgres is unavailable. Kafka and Schema Registry integration tests are not part of the current suite.
+Tests marked `integration` are excluded from `make test` and run in the separate integration job. Locally, `make test-integration` prepares the isolated services and fails if they are unavailable. See [Phase 11 integration testing](docs/integration-testing.md) for setup, isolation, and scenario evidence.
 
 ## Phase 8: Live Earthquake Producer
 
@@ -262,6 +262,16 @@ offset advances only after a successful DLQ delivery report. Unknown failures
 and persistent infrastructure failures stop the consumer with the offset
 pending. See [Phase 10 retry and DLQ operations](docs/retry-dead-letter.md)
 for the exact contract, Kpow procedure, local evidence, and limitations.
+
+## Phase 11: Integration and Resilience Testing
+
+`make test-integration` uses a disposable Compose project to test the real
+Kafka → Schema Registry → enrichment → Postgres path, replay idempotence,
+dead-letter delivery, and recovery after a controlled Postgres outage. It
+checks Kafka messages and offsets alongside SQL rows, then removes only its
+test containers and volumes. `make ci` remains the fast lint and offline test
+command. See [Integration and Resilience Testing](docs/integration-testing.md)
+for local commands, failure behavior, CI, and limits.
 
 ## Local Services
 
@@ -323,6 +333,7 @@ make clean
 - [Observability](docs/observability.md)
 - [Fault Recovery and Replay Testing](docs/recovery-testing.md)
 - [Retry and Dead-Letter Handling](docs/retry-dead-letter.md)
+- [Integration and Resilience Testing](docs/integration-testing.md)
 - [Phase 0 Design](docs/phase-0-design.md)
 - [Naming Conventions](docs/naming-conventions.md)
 - [Technical Decisions](docs/technical-decisions.md)
