@@ -49,6 +49,16 @@ Both consumers stop with the input offset pending for unclassified errors or exh
 
 These choices and their limits are documented in the [ADRs](docs/adr/README.md) and [recovery testing guide](docs/recovery-testing.md).
 
+## Operational evidence
+
+![Kpow consumer groups with active members, assigned partitions, committed offsets matching log end offsets, and zero lag](docs/images/kpow-consumer-groups.jpg)
+
+Both independent consumer groups are Stable, with active members and zero lag across their assigned partitions after processing the available events.
+
+![Kpow inspection of a decoded enriched earthquake event](docs/images/kpow-enriched-events.jpg)
+
+An `enriched_earthquakes` Avro record shows its Kafka key and coordinates alongside derived `severity_level` and `is_shallow` fields. A real invalid message and its source coordinates are shown in the [DLQ evidence](docs/observability.md#dead-letter-evidence).
+
 ## Quick start
 
 Requires Python 3.11+, Docker Compose v2, and Make. Kpow is optional for the pipeline; its UI needs a local license in `.env.kpow` as described in the [observability guide](docs/observability.md). From the repository root:
@@ -107,7 +117,7 @@ The integration assertions inspect actual Kafka messages, committed offsets, and
 - The local Kafka deployment has one broker. It does not demonstrate high availability after broker or disk loss. Persistent infrastructure or unexpected errors can stop a consumer and require manual investigation or restart; DLQ records are not automatically replayed.
 - The default USGS feed is worldwide, with limited place-name inference for Chile and no strict geographic filter. This is a local-first implementation, not a cloud production deployment.
 
-The completed project ends at **Phase 11**. Cloud deployment, Terraform, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, new observability tools, producers, dashboards, and business features are outside its scope. The unused metric schema is retained as a historical scaffold, not an implemented metrics stream. See the [closed roadmap](docs/roadmap.md).
+The completed project ends at **Phase 11**. Cloud deployment, Terraform, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, new observability tools, producers, dashboards, and business features are outside its scope. See the [closed roadmap](docs/roadmap.md).
 
 ## Further documentation
 

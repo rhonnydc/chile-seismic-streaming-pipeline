@@ -1,12 +1,3 @@
-# Docker Infrastructure
+# Docker infrastructure
 
-Docker Compose will be the main local execution mechanism in later phases.
-
-Planned local services:
-
-- Kafka
-- Schema Registry
-- Kpow
-- Postgres
-
-Phase 0 only reserves this directory for Docker-related documentation and supporting files.
+The repository root [`docker-compose.yml`](../../docker-compose.yml) runs the local Kafka, Schema Registry, PostgreSQL, and optional Kpow services. The [`Makefile`](../../Makefile) exposes `make up` and `make down`; see the [Quick start](../../README.md#quick-start) and [observability guide](../../docs/observability.md).

@@ -116,3 +116,9 @@ CLI offset checks, and the controlled two-consumer run. Compare the DLQ
 record's source topic, partition, and offset with the affected group's
 committed position. Logs distinguish a bounded retry, a DLQ delivery, and a
 consumer stopping on an unresolved infrastructure or unexpected error.
+
+## Dead-letter evidence
+
+This Kpow capture shows an existing `dead_letter_earthquakes` record from the PostgreSQL sink. It includes `INVALID_AVRO`, the source topic, partition, offset, and original bytes in base64. The screenshot documents isolation of this message; the behavior around failure and recovery is verified by the [integration tests](integration-testing.md).
+
+![Kpow dead-letter record with error code, source coordinates, and original bytes](images/kpow-dead-letter.jpg)

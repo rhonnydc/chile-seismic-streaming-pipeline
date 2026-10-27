@@ -18,7 +18,6 @@ Schema filenames map one-to-one to event types.
 | --- | --- |
 | `raw_earthquake_event.avsc` | Input event contract. |
 | `enriched_earthquake_event.avsc` | Processed event contract. |
-| `seismic_metric_event.avsc` | Unused historical metric schema scaffold; not registered or published. |
 
 ## Python Modules
 

@@ -15,4 +15,4 @@ The Chilean Seismic Streaming Data Pipeline is complete through **Phase 11**. Th
 
 ## Scope closure
 
-No further functional phase is planned. Terraform and cloud deployment, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, additional observability tools, producers, dashboards, and business features are outside this project's scope. The local pipeline and its verified delivery guarantees are the final portfolio artifact. The metric schema is an unused early scaffold, not an implemented metrics stream.
+No further functional phase is planned. Terraform and cloud deployment, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, additional observability tools, producers, dashboards, and business features are outside this project's scope. The local pipeline and its verified delivery guarantees are the final portfolio artifact.

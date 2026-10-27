@@ -88,5 +88,3 @@ make produce-fake
 `reset-raw-topic` deletes all retained messages in `raw_earthquakes`, waits for deletion, and recreates it with three partitions and replication factor one. The script accepts only the project topic on `localhost:9092` or `127.0.0.1:9092`; it does not reset other topics or remote brokers. `create-topics` is safe to run afterward because it leaves an existing topic in place. Do not run the reset once the topic contains data that must be retained; a later migration would need a separate topic or another explicit cutover plan.
 
 In Kpow, inspect `raw_earthquakes` for Avro records keyed by `event_id`, `enriched_earthquakes` for records with the six derived fields, and Schema Registry for both value subjects. The local Kpow UI requires the project's license configuration. Both the PostgreSQL sink and USGS producer are implemented; see the [architecture](architecture.md).
-
-The repository also retains `schemas/seismic_metric_event.avsc` from early design work. No producer, consumer, topic, registration step, or test uses this metric contract. It is not part of the deployed event flow.

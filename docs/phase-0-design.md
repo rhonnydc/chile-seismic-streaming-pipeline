@@ -6,6 +6,8 @@ Phase 0 establishes the project foundation: repository structure, documentation,
 
 The phase is intentionally non-runtime. Kafka, Postgres, Schema Registry, Kpow, producers, and consumers are introduced in later phases.
 
+This is a historical Phase 0 record. The completed repository keeps the raw and enriched Avro contracts; the unused metric scaffold and Terraform placeholder were removed after Phase 11. [ADR 007](adr/007-cloud-infrastructure.md) records the cloud infrastructure decision.
+
 ## Deliverables
 
 | Area | Deliverable |
