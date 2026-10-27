@@ -8,7 +8,6 @@ Topic names use lowercase snake case and describe the event stream, not the prod
 | --- | --- |
 | `raw_earthquakes` | Simulated and USGS seismic events. |
 | `enriched_earthquakes` | Raw event fields plus six derived fields. |
-| `seismic_metrics` | Planned aggregate metrics stream. |
 | `dead_letter_earthquakes` | JSON envelopes for isolated invalid inputs from both consumers. |
 
 ## Schemas
@@ -19,7 +18,7 @@ Schema filenames map one-to-one to event types.
 | --- | --- |
 | `raw_earthquake_event.avsc` | Input event contract. |
 | `enriched_earthquake_event.avsc` | Processed event contract. |
-| `seismic_metric_event.avsc` | Metric event contract. |
+| `seismic_metric_event.avsc` | Unused historical metric schema scaffold; not registered or published. |
 
 ## Python Modules
 

@@ -169,6 +169,6 @@ retry exhaustion, or Postgres reconnection; those paths have unit coverage.
 The single-broker local replication factor is not a durability guarantee
 against broker or disk loss. Automatic DLQ replay is deliberately absent.
 
-A later replay tool would need to decode the original bytes, repair or approve
-the cause, and publish to the correct source topic while handling duplicate
-source positions. It must not assume that every record has an `event_id`.
+Manual replay from the DLQ requires decoding the original bytes, resolving the
+cause, and publishing to the correct source topic while handling duplicate
+source positions. Not every DLQ record has an `event_id`.

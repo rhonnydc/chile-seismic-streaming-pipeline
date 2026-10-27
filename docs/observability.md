@@ -1,10 +1,10 @@
 # Observability
 
-## Phase 1 Scope
+## Scope
 
-Phase 1 configures Kpow as the local Kafka observability tool. Its UI requires a valid local license in `.env.kpow`.
+Kpow is the local Kafka inspection tool. Its UI requires a valid local license in `.env.kpow`; the data pipeline and integration tests do not require it.
 
-This phase does not include Prometheus, Grafana, alerting, distributed tracing, log aggregation, or production monitoring.
+The project does not include Prometheus, Grafana, alerting, distributed tracing, log aggregation, or production monitoring.
 
 ## Kpow Role
 
@@ -25,7 +25,7 @@ Kpow requires a local license before the UI is usable. Copy `.env.kpow.example` 
 
 ## What Can Be Observed
 
-With the local license configured, Kpow can inspect the `raw_earthquakes` and `enriched_earthquakes` messages and their registered value schemas. Phase 4 also makes consumer groups, offsets, and lag useful:
+With the local license configured, Kpow can inspect the `raw_earthquakes`, `enriched_earthquakes`, and `dead_letter_earthquakes` messages, the registered value schemas, consumer groups, offsets, and lag:
 
 | Area | What it helps answer |
 | --- | --- |
@@ -37,9 +37,9 @@ With the local license configured, Kpow can inspect the `raw_earthquakes` and `e
 | Consumer lag | Whether a consumer is falling behind the producer. |
 | Partitions | How events are distributed across topic partitions. |
 
-## Phase 1 Checks
+## Service checks
 
-Before any application code exists, the main observability checks are service-level:
+Basic service checks are:
 
 ```bash
 docker compose ps
@@ -61,16 +61,16 @@ Schema Registry can be checked from the host:
 curl http://localhost:8081/subjects
 ```
 
-On a fresh Phase 1 stack, Kafka may only show internal topics such as:
+Before running `make create-topics`, a fresh stack may show only internal topics such as:
 
 ```text
 __consumer_offsets
 _schemas
 ```
 
-That is expected for Phase 1. Phase 3 adds `raw_earthquakes` and its Avro events; Phase 4 adds `enriched_earthquakes` and a consumer group.
+Run `make create-topics` to create all three application topics, then run the producers and consumers to populate them.
 
-## Phase 4 Checks In Kpow
+## Enrichment checks in Kpow
 
 After registering both schemas, creating both topics, and publishing fake raw events, start `make consume-enrich` (or the direct Python command in the README). With Kpow open at `http://localhost:3000`, check:
 
@@ -82,7 +82,7 @@ After registering both schemas, creating both topics, and publishing fake raw ev
 
 The consumer logs `event_id`, source partition, and source offset after each successful commit. Phase 4 stopped without committing on an invalid input or output delivery failure. Phase 10 now isolates proven invalid inputs in a DLQ after a delivery acknowledgement; unknown and infrastructure failures still stop with the offset pending.
 
-## Phase 5 Sink Checks
+## PostgreSQL sink checks
 
 Start the Postgres sink consumer after the table has been initialized with `make init-db` (or the equivalent `psql` command). Keep the enricher and sink in separate terminals, then publish fake events. The sink logs `event_id`, whether the row was newly inserted, the enriched topic partition and offset, and its consumer group after each successful Kafka offset commit.
 
@@ -101,14 +101,14 @@ docker compose exec -T postgres psql -U seismic_user -d seismic -c "SELECT event
 
 Run `make query-db` (or `sql/analytics_queries.sql` through `psql`) for the four analytical views of the stored events. A zero-lag group means its offsets caught up with Kafka at that moment; compare it with Postgres rows and sink logs to verify persistence. Replaying an event may log `inserted=False` because `ON CONFLICT (event_id) DO NOTHING` kept the existing row. Phase 10 retries known connection failures and isolates proven invalid inputs; other failures leave the offset uncommitted and stop the consumer.
 
-## Phase 9 Recovery Evidence
+## Recovery evidence
 
 See [Fault Recovery and Replay Testing](recovery-testing.md) for reproducible local steps and
 observed offsets, Python logs, and SQL results for consumer restarts, Postgres failure, and
 replays across both commit boundaries. Kpow can cross-check group membership and lag, while SQL
 is needed to verify that a replay leaves one Postgres row per `event_id`.
 
-## Phase 10 DLQ Checks
+## DLQ checks
 
 See [Retry and Dead-Letter Handling](retry-dead-letter.md) for the shared
 `dead_letter_earthquakes` JSON contract, the Kpow Data → Inspect procedure,

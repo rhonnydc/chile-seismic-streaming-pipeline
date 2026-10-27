@@ -1,7 +1,8 @@
-# Terraform Infrastructure
+# Historical Terraform placeholder
 
-Terraform will be added later as an optional cloud-ready layer.
+This directory was reserved during the initial design. It contains no Terraform
+resources and is not used by the local pipeline.
 
-It must not be required to run the local MVP.
-
-Phase 0 only reserves this directory for future Terraform modules, environments, and documentation.
+The project is complete at Phase 11. Cloud deployment and Terraform are outside
+its final scope; see the [closed roadmap](../../docs/roadmap.md) and
+[ADR 007](../../docs/adr/007-cloud-infrastructure.md).

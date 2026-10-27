@@ -1,6 +1,13 @@
 # Architecture
 
-## Phase 1 Runtime
+The implemented flow is synthetic or USGS events → raw Avro topic → enrichment
+consumer → enriched Avro topic → PostgreSQL sink consumer → analytical table.
+Both consumers can send proven invalid inputs to the shared dead-letter topic.
+Data quality checks query the stored table; Kpow inspects Kafka when licensed.
+The [README diagram](../README.md#architecture) shows these runtime paths.
+The sections below retain the phase history and explain individual boundaries.
+
+## Local runtime
 
 ```text
 Host machine
@@ -15,7 +22,8 @@ Docker Compose network
   |-- kpow            -> schema-registry:8081
 ```
 
-Phase 1 creates the local infrastructure layer only. It does not create producers, consumers, processing jobs, definitive topics, or analytical tables.
+This Compose stack provides the services used by the implemented producers,
+consumers, topics, and analytical table.
 
 ## Components
 
@@ -24,7 +32,7 @@ Phase 1 creates the local infrastructure layer only. It does not create producer
 | Kafka | Local event broker for seismic events. |
 | Schema Registry | Local schema service connected to Kafka. |
 | Kpow | Local UI for inspecting Kafka and Schema Registry; requires a local license. |
-| Postgres | Local database for Phase 5 analytical persistence of enriched events. |
+| Postgres | Local database for analytical persistence of enriched events. |
 
 ## Kafka Connectivity
 
@@ -122,7 +130,7 @@ The internal event model is independent of a particular data provider. The fake 
 | `ingested_at` | Time the pipeline receives the event |
 | `country`, `region` | Inferred from simple place-name rules; otherwise `UNKNOWN` |
 
-This boundary lets later processing use one stable event shape even when the source format changes. Consumers, enrichment, Postgres writes, and live API ingestion were added in later phases.
+This boundary lets both implemented producers use one stable event shape for the enrichment consumer and PostgreSQL sink.
 
 ## Phase 3 Avro Event Flow
 

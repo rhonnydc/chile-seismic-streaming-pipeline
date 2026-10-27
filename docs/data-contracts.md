@@ -11,7 +11,7 @@ The record has 18 fields, matching the Phase 2 internal model:
 | Field | Avro type | Meaning |
 | --- | --- | --- |
 | `event_id` | `string` | Pipeline event identifier |
-| `source` | `string` | Event source, currently `simulator` |
+| `source` | `string` | Event source, `simulator` or `usgs` |
 | `source_event_id` | `string` | Identifier at the source |
 | `event_time_utc` | `string` | Event time in UTC |
 | `updated_at_utc` | `string` | Source update time in UTC |
@@ -87,4 +87,6 @@ make produce-fake
 
 `reset-raw-topic` deletes all retained messages in `raw_earthquakes`, waits for deletion, and recreates it with three partitions and replication factor one. The script accepts only the project topic on `localhost:9092` or `127.0.0.1:9092`; it does not reset other topics or remote brokers. `create-topics` is safe to run afterward because it leaves an existing topic in place. Do not run the reset once the topic contains data that must be retained; a later migration would need a separate topic or another explicit cutover plan.
 
-In Kpow, inspect `raw_earthquakes` for Avro records keyed by `event_id`, `enriched_earthquakes` for records with the six derived fields, and Schema Registry for both value subjects. The local Kpow UI requires the project's license configuration. Phase 4 adds enrichment; a Postgres sink and live source remain outside the current implementation.
+In Kpow, inspect `raw_earthquakes` for Avro records keyed by `event_id`, `enriched_earthquakes` for records with the six derived fields, and Schema Registry for both value subjects. The local Kpow UI requires the project's license configuration. Both the PostgreSQL sink and USGS producer are implemented; see the [architecture](architecture.md).
+
+The repository also retains `schemas/seismic_metric_event.avsc` from early design work. No producer, consumer, topic, registration step, or test uses this metric contract. It is not part of the deployed event flow.

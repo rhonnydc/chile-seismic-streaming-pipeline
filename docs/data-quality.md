@@ -1,6 +1,6 @@
 # Data Quality Checks
 
-Phase 6 checks whether the analytical Postgres table `enriched_earthquake_events` is suitable for basic analysis. The checks inspect persisted rows; they do not change data or replace validation in the producer, enrichment stage, or database schema. Each SQL query counts invalid rows and the Python runner reports PASS when that count is zero.
+The quality runner checks whether the analytical Postgres table `enriched_earthquake_events` is suitable for basic analysis. The checks inspect persisted rows; they do not change data or replace validation in the producer, enrichment stage, or database schema. Each SQL query counts invalid rows and the Python runner reports PASS when that count is zero.
 
 ## Rules
 
@@ -42,6 +42,6 @@ make quality-checks
 
 The report prints one PASS or FAIL per rule. A failed rule includes its invalid row count; the final summary gives passed and failed check counts. Exit code `0` means all rules passed, `1` means at least one rule failed, and `2` means the checks could not run (for example, a database connection or SQL error). An empty table fails `row_count_check` even though row-level checks may pass.
 
-## Scope and future use
+## Scope
 
-This phase uses Python, SQL, and pytest so the rules stay visible and easy to change without a data quality framework. It does not add a live API, dead-letter topic, aggregate Kafka metrics, dashboards, Terraform, or CI/CD configuration. A later CI job could run `make test-quality` for code changes and `make quality-checks` against a populated test database, using the exit code as its gate.
+The project uses Python, SQL, and pytest so the rules remain visible. The fast CI job includes the quality unit tests. The service-backed integration job verifies pipeline delivery and persistence but does not run `make quality-checks` against its test database. Run that command separately against a populated local table. The quality runner reports stored-row consistency; it does not repair data or change Kafka offsets.

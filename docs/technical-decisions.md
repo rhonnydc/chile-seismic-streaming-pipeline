@@ -1,10 +1,10 @@
 # Technical Decisions
 
-This document records the project's early design direction. See the [architecture decision records](adr/README.md) for phase-specific decisions and their status.
+This document records the project's design choices and historical context. See the [architecture decision records](adr/README.md) for their final status and the [closed roadmap](roadmap.md) for scope.
 
 ## Local execution is the default path
 
-Docker Compose will be the primary runtime for development and demos. A reviewer should be able to run the project locally without cloud credentials.
+Docker Compose is the runtime for development and demos. A reviewer can run the project locally without cloud credentials.
 
 ## Fake data comes before live ingestion
 
@@ -15,15 +15,15 @@ Phase 8 added a USGS GeoJSON polling producer that normalizes features into the 
 ## Kafka is the streaming backbone
 
 Kafka carries the `raw_earthquakes` input stream, the `enriched_earthquakes`
-output stream, and the Phase 10 `dead_letter_earthquakes` error stream. An
-aggregate metrics topic belongs to a later phase. [ADR 009](adr/009-retry-and-dead-letter.md)
+output stream, and the `dead_letter_earthquakes` error stream. Aggregate
+metrics are outside the completed project's scope. [ADR 009](adr/009-retry-and-dead-letter.md)
 records the DLQ and retry decision.
 
 ## Event contracts are first-class artifacts
 
 Schemas live in `schemas/` and are version-controlled. Phase 3 uses Avro for `raw_earthquakes`; Phase 4 uses Avro for `enriched_earthquakes`. Schema Registry versions the separate value contracts under `raw_earthquakes-value` and `enriched_earthquakes-value`. Both serializers require explicit registration.
 
-Phase 2 published plain JSON. Its retained local messages must be removed before Avro publication; the reset command is limited to the disposable local raw topic. The raw `.avsc` matches the internal event model, and the enriched `.avsc` adds six derived fields. The metric `.avsc` remains a scaffold for a later phase. [ADR 003](adr/003-wire-contract.md) records the verified raw Avro cutover.
+Phase 2 published plain JSON. Its retained local messages must be removed before Avro publication; the reset command is limited to the disposable local raw topic. The raw `.avsc` matches the internal event model, and the enriched `.avsc` adds six derived fields. The metric `.avsc` is an unused historical scaffold, not a deployed contract. [ADR 003](adr/003-wire-contract.md) records the verified raw Avro cutover.
 
 ## Python owns application logic
 
@@ -37,10 +37,10 @@ Postgres stores enriched events in `enriched_earthquake_events` with `event_id` 
 
 Kpow inspects topics, Avro messages, Schema Registry subjects, the consumer group, committed offsets, and lag during local development.
 
-## Terraform is optional infrastructure
+## Cloud infrastructure is outside scope
 
-Terraform is a future option if the pipeline develops a real deployment need. It is outside Phase 8 and does not block the local Docker Compose path.
+No Terraform resources or cloud deployment were implemented. [ADR 007](adr/007-cloud-infrastructure.md) is closed without adoption.
 
-## Tools intentionally excluded from the MVP
+## Tools outside the final scope
 
-Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana are out of scope for the first implementation.
+Flink, Spark, Airflow, Kubernetes, Iceberg, Prometheus, and Grafana are outside the completed project scope.

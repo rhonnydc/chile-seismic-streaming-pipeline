@@ -1,66 +1,18 @@
-# Roadmap
+# Completed project scope
 
-## Phase 0: Base Design
+The Chilean Seismic Streaming Data Pipeline is complete through **Phase 11**. This record summarizes delivered work; it is not a queue of future phases.
 
-Create the repository structure, documentation, naming conventions, environment example, Makefile, Python package skeleton, and infrastructure directories.
+| Phase | Completed result |
+| --- | --- |
+| 0–1 | Repository design and a reproducible local Docker Compose stack with Kafka, Schema Registry, PostgreSQL, and optional Kpow. |
+| 2–3 | Synthetic event producer, source-independent event model, registered raw Avro contract, and contract tests. |
+| 4–5 | Independent enrichment and PostgreSQL sink consumers, enriched Avro contract, manual commits, idempotent persistence, and analytical SQL. |
+| 6–7 | SQL-based data quality reporting, fast unit and contract checks, Ruff, and GitHub Actions CI. |
+| 8 | USGS GeoJSON polling producer using the existing raw contract; default worldwide feed without a Chile-only filter. |
+| 9 | Documented consumer recovery and replay at delivery boundaries; see [recovery testing](recovery-testing.md). |
+| 10 | Conservative error classification, bounded retries, and shared dead-letter routing; see [retry and DLQ operations](retry-dead-letter.md) and [ADR 009](adr/009-retry-and-dead-letter.md). |
+| 11 | Isolated real-service integration tests for end-to-end delivery, replay, DLQ, and controlled PostgreSQL outage; see [integration testing](integration-testing.md). |
 
-## Phase 1: Local Docker Foundation
+## Scope closure
 
-Add Docker Compose services for Kafka, Schema Registry, Kpow, and Postgres.
-
-## Phase 2: Fake Event Producer
-
-Implement a Python producer that generates fake Chilean seismic events and publishes them to `raw_earthquakes`.
-
-## Phase 3: Contracts and Validation
-
-Register schemas, validate event contracts, and add contract tests.
-
-## Phase 4: Consumer and Processor
-
-Consume Avro events from `raw_earthquakes`, apply Python enrichment, and publish Avro events to `enriched_earthquakes` using `event_id` as the key. Track progress with a consumer group and manual offset commits. Metrics and dead-letter handling are outside Phase 4.
-
-## Phase 5: Analytical Sink
-
-Consume Avro events from `enriched_earthquakes` with a separate consumer group and persist them idempotently in Postgres. Expose simple analytical SQL queries. Aggregate metrics remain outside Phase 5.
-
-## Phase 6: Data Quality
-
-Add data quality checks over the Postgres analytical table and a command that reports pass or fail.
-
-## Phase 7: Testing and CI
-
-Run fast unit and contract tests with Ruff through `make ci` and GitHub Actions. Keep service-dependent integration tests separate.
-
-## Phase 8: Live Earthquake Producer
-
-Poll a configurable USGS GeoJSON feed, normalize usable earthquake features into the existing `EarthquakeEvent` model, and publish them as Avro to `raw_earthquakes`. Preserve the fake producer and downstream contracts. Deduplicate within one process run; country and region inference remains intentionally limited.
-
-## Phase 9: Fault Recovery and Replay Testing
-
-Document and verify local consumer restarts, lag, a Postgres outage, and crashes
-at both delivery boundaries. Keep the existing groups and idempotent Postgres
-write. See [recovery testing](recovery-testing.md) for observed evidence.
-
-## Phase 10: Retry, Error Handling, and Dead-Letter Queue
-
-Classify transient, permanent-input, and unexpected failures in both Python
-consumers. Apply bounded in-process retries to known recoverable operations and
-route proven invalid inputs to `dead_letter_earthquakes` with original bytes
-and source coordinates. Commit the source offset only after successful output,
-Postgres, or DLQ delivery as appropriate. Deterministic tests, `make ci`, and
-controlled local Kafka/Postgres/Kpow checks are complete. See
-[retry and dead-letter operations](retry-dead-letter.md) and [ADR 009](adr/009-retry-and-dead-letter.md).
-
-## Phase 11: Integration and Resilience Testing
-
-Use a disposable Compose project to run Kafka, Schema Registry, and Postgres
-integration tests from a clean checkout. Verify the end-to-end Avro pipeline,
-idempotent sink replay, DLQ source metadata and bytes, and recovery after a
-controlled Postgres outage. Keep `make ci` fast; run integration tests through
-`make test-integration` locally and in a separate GitHub Actions job. See
-[integration testing](integration-testing.md) for commands, evidence, and limits.
-
-## Future: Optional Cloud Infrastructure
-
-Consider Terraform only after the local pipeline has a concrete deployment need.
+No further functional phase is planned. Terraform and cloud deployment, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, additional observability tools, producers, dashboards, and business features are outside this project's scope. The local pipeline and its verified delivery guarantees are the final portfolio artifact. The metric schema is an unused early scaffold, not an implemented metrics stream.

@@ -1,341 +1,116 @@
 # Chilean Seismic Streaming Data Pipeline
 
-Local-first streaming data pipeline for Chilean seismic events.
+[![CI](https://github.com/rhonnydc/chile-seismic-streaming-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/rhonnydc/chile-seismic-streaming-pipeline/actions/workflows/ci.yml)
 
-The project evolves in small phases. Phase 1 provides a reproducible Docker Compose stack with Kafka, Schema Registry, Kpow, and Postgres. Phase 2 introduced a Python fake earthquake producer. Phase 3 publishes its events as Avro using the versioned `raw_earthquakes` contract in Schema Registry. Phase 4 consumes those Avro events, enriches them in Python, and publishes Avro events to `enriched_earthquakes`. Phase 5 consumes the enriched events into an analytical Postgres table. Phase 8 adds a USGS GeoJSON polling producer that uses the same raw contract. Phase 9 verifies recovery and replay, while Phase 10 adds bounded retries and a shared dead-letter topic for proven invalid inputs.
+## The problem
 
-## Phase 1 Scope
+Earthquake events arrive and can be updated continuously. Turning them into dependable analytical data involves more than polling an API: the pipeline needs explicit event contracts, recoverable processing, duplicate handling, invalid-input isolation, and checks on what was stored. This local project is inspired by Chilean seismic activity. Its default USGS feed covers the **world**; the live producer does not enforce a Chile-only geographic filter.
 
-Phase 1 includes:
+## What I built
 
-- Kafka as the local event broker.
-- Schema Registry as the local schema service.
-- Kpow as the local Kafka inspection UI, using a local license.
-- Postgres as the local analytical database.
-- Docker Compose commands for starting, inspecting, stopping, and cleaning the stack.
+A local-first, event-driven pipeline accepts synthetic earthquakes or polls the USGS GeoJSON feed. Both producers publish raw events to Kafka using a registered Avro contract. An independent consumer validates and enriches them into a second Avro topic; another consumer writes analytical rows to PostgreSQL. A primary key makes database replay idempotent. The consumers use manual offset commits, bounded retries for classified transient failures, and a shared dead-letter topic for proven invalid inputs. SQL-based data quality checks report failures after persistence. Kpow provides optional inspection of messages, schemas, groups, and offsets. Automated tests exercise the transformation, contracts, delivery boundaries, and real-service recovery paths.
 
-The current flow is: fake producer or USGS polling producer -> Avro `raw_earthquakes` -> Python enrichment consumer -> Avro `enriched_earthquakes` -> Python Postgres sink consumer -> `enriched_earthquake_events`.
+## What it demonstrates
 
-## Repository Layout
+The project connects event contracts and consumer groups to observable delivery behavior: output delivery or a database transaction is confirmed before the corresponding input offset is committed. This yields **at-least-once processing**, with possible Kafka duplicates and an idempotent PostgreSQL result. Unit and contract tests cover the logic; isolated integration tests check Kafka messages, committed offsets, SQL rows, replay, dead-letter delivery, and recovery after a controlled database outage. Docker Compose and separate GitHub Actions jobs make these checks reproducible. [ADRs](docs/adr/README.md) record the design choices and their trade-offs.
 
-```text
-.
-+-- docs/              Technical documentation and project decisions
-+-- infra/             Docker and Terraform project files
-+-- schemas/           Avro event contracts
-+-- scripts/           Operational helper scripts
-+-- sql/               Postgres table and analytical queries
-+-- src/               Python package source
-+-- tests/             Unit, integration, and contract tests
-+-- .env.example       Local configuration template
-+-- docker-compose.yml Local Docker Compose stack
-+-- Makefile           Development command shortcuts
-+-- pyproject.toml     Python package and tooling configuration
+## Architecture
+
+```mermaid
+flowchart LR
+    Fake[Fake Producer] --> Raw[(Kafka raw_earthquakes)]
+    USGS[USGS Live Producer] --> Raw
+    Registry[Schema Registry] -. Avro contracts .- Raw
+    Raw --> Enricher[Enrichment consumer]
+    Enricher --> Enriched[(Kafka enriched_earthquakes)]
+    Registry -. Avro contracts .- Enriched
+    Enriched --> Sink[PostgreSQL sink consumer]
+    Sink --> DB[(PostgreSQL)]
+    Enricher -- proven invalid input --> DLQ[(Dead Letter Topic)]
+    Sink -- proven invalid input --> DLQ
+    DB --> DQ[Data Quality checks]
+    Kpow[Kpow inspection UI] -. inspect topics, groups, offsets .- Raw
+    Kpow -. inspect .- Enriched
+    Kpow -. inspect .- DLQ
 ```
 
-## Requirements
+Both consumers stop with the input offset pending for unclassified errors or exhausted infrastructure retries; only classified invalid inputs take the DLQ route. Kpow is optional and requires a local license. See [architecture](docs/architecture.md) and [retry and dead-letter handling](docs/retry-dead-letter.md) for the exact boundaries.
 
-- Docker Desktop
-- Docker Compose v2
-- Python 3.11 or newer and pip for the producer, consumer, and tests
-- Make, optional on Windows
+## Engineering quality and reliability
 
-Kafka, Schema Registry, Kpow, and Postgres do not need to be installed directly on the host machine.
+| Engineering practice | Implementation | Evidence |
+| --- | --- | --- |
+| Data contracts | Versioned raw and enriched Avro schemas; explicit Schema Registry registration with `BACKWARD_TRANSITIVE` compatibility | [Schemas](schemas/), [registration](scripts/register_schemas.py), [contract tests](tests/contracts/) |
+| Delivery and offset management | Separate consumer groups; manual commits after enriched or DLQ delivery and after the database transaction | [Enricher](src/seismic_pipeline/consumers/enriching_consumer.py), [sink consumer](src/seismic_pipeline/consumers/postgres_sink_consumer.py), [end-to-end test](tests/integration/test_end_to_end.py) |
+| Idempotent analytical storage | `event_id` primary key and `ON CONFLICT (event_id) DO NOTHING`; first stored version wins | [Table](sql/init.sql), [sink SQL](src/seismic_pipeline/sinks/postgres_sink.py), [replay test](tests/integration/test_replay.py) |
+| Failure handling | Conservative error classification, at most three attempts for known transient operations, database reconnection on retry, and original Kafka bytes plus source coordinates in the DLQ | [Policy](src/seismic_pipeline/consumers/error_policy.py), [retry](src/seismic_pipeline/consumers/retry.py), [DLQ envelope](src/seismic_pipeline/consumers/dead_letter.py), [DLQ test](tests/integration/test_dead_letter_pipeline.py), [outage test](tests/integration/test_postgres_outage.py) |
+| Data quality | Read-only SQL checks over a consistent PostgreSQL snapshot; PASS/FAIL report and nonzero failure exit | [Checks](src/seismic_pipeline/quality/checks.py), [runner](src/seismic_pipeline/quality/runner.py), [guide](docs/data-quality.md) |
+| Reproducible verification | Fast offline gate plus isolated Kafka, Schema Registry, and PostgreSQL integration run with bounded waits and teardown | [Makefile](Makefile), [integration runner](scripts/run_integration.py), [CI workflow](.github/workflows/ci.yml), [integration guide](docs/integration-testing.md) |
 
-## Local Configuration
+These choices and their limits are documented in the [ADRs](docs/adr/README.md) and [recovery testing guide](docs/recovery-testing.md).
 
-Create a local `.env` file from the versioned template:
+## Quick start
+
+Requires Python 3.11+, Docker Compose v2, and Make. Kpow is optional for the pipeline; its UI needs a local license in `.env.kpow` as described in the [observability guide](docs/observability.md). From the repository root:
 
 ```bash
+git clone https://github.com/rhonnydc/chile-seismic-streaming-pipeline.git
+cd chile-seismic-streaming-pipeline
 cp .env.example .env
-```
-
-On Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-`.env.example` is versioned because it documents the variables required by the project. `.env` is ignored by Git because it is the local machine-specific copy.
-
-Kpow requires a local license before the UI is usable. Store license variables in `.env.kpow`; this file is ignored by Git through the existing `.env.*` rule.
-
-Create the local Kpow license file from the versioned template:
-
-```bash
-cp .env.kpow.example .env.kpow
-```
-
-On Windows PowerShell:
-
-```powershell
-Copy-Item .env.kpow.example .env.kpow
-```
-
-Then fill `.env.kpow` with the license values from the Kpow email:
-
-```env
-LICENSE_ID=
-LICENSE_CODE=
-LICENSEE=
-LICENSE_CREDITS=
-LICENSE_EXPIRY=
-LICENSE_SIGNATURE=
-```
-
-If the provided environment block omits `LICENSE_CREDITS`, use the `Cluster Credits` value from the license certificate. Copy the signature directly from the original text to avoid transcription errors.
-
-## Running The Stack
-
-```bash
-docker compose config --quiet
-docker compose up -d
-docker compose ps
-```
-
-If `make` is available:
-
-```bash
-make up
-make ps
-```
-
-Wait until Kafka is healthy before creating the topic.
-
-## Fake Producer and Phase 3 Avro Contract
-
-Create a Python virtual environment and install the project:
-
-```bash
 python -m venv .venv
-# Activate the environment, then:
-python -m pip install -e ".[dev]"
-```
-
-On Windows PowerShell, activate it with `.\.venv\Scripts\Activate.ps1`; on macOS or Linux, use `source .venv/bin/activate`. Set `FAKE_PRODUCER_EVENT_COUNT` and `FAKE_PRODUCER_INTERVAL_SECONDS` in `.env` to change the default 10 events and 1 second between events.
-
-After `make up` and `make ps`, register and check the contract before producing:
-
-```bash
-make register-schemas
-make list-schemas
-make test-contracts
-make create-topics
-make produce-fake
-```
-
-`make reset-raw-topic` deletes and recreates the disposable local topic. It was only needed for the initial Phase 2 JSON-to-Avro cutover if those old messages were retained; do not use it for routine Phase 10 testing. The producer requires the registered schema and does not register it automatically.
-
-Without Make, run `python scripts/register_schemas.py`, `python -m pytest tests/contracts tests/unit/test_fake_earthquake_producer.py`, `python scripts/reset_raw_topic.py` when cutting over from JSON, `python scripts/create_topics.py`, and `python -m seismic_pipeline.producers.fake_earthquake_producer`. Direct Python commands read process environment variables or use local defaults; Make loads `.env` for them.
-
-Open Kpow at `http://localhost:3000`, inspect `raw_earthquakes` for Avro messages keyed by `event_id`, and check that the subject `raw_earthquakes-value` appears in Schema Registry. You can also verify the subject directly with `curl http://localhost:8081/subjects` (use `curl.exe` in PowerShell).
-
-The fake producer still generates the source-independent internal event model introduced in Phase 2. See [Data Contracts](docs/data-contracts.md) for its 18 fields, Avro schema, compatibility rule, and safe local cutover. The live producer described below builds the same model from USGS GeoJSON.
-
-## Phase 4: Consume and Enrich
-
-The enricher reads `raw_earthquakes` with the `seismic-enricher` consumer group, deserializes values through Schema Registry, and copies each raw record with six derived fields: `severity_level`, `is_shallow`, `event_date_utc`, `event_hour_utc`, `ingestion_latency_seconds`, and `processed_at_utc`. Ingestion latency is `ingested_at - event_time_utc` in seconds. It publishes the result as Avro to `enriched_earthquakes` with `event_id` as the message key.
-
-Start the stack and register both schemas before publishing or consuming. If the disposable raw topic still contains Phase 2 JSON messages, follow the reset procedure above before producing new Avro messages. Then run:
-
-```bash
-make up
-make ps
-make register-schemas
-make create-topics
-make produce-fake
-make test-enrichment
-make consume-enrich
-```
-
-`make consume-enrich` keeps running until interrupted. It uses manual offset commits after each enriched delivery report. A restart can therefore publish a duplicate if delivery succeeded but the process stopped before its source offset was committed. The default `auto.offset.reset=earliest` lets a new group process raw events already on the topic. A previously used group resumes from its committed offsets.
-
-On Windows without Make, the equivalent Phase 4 commands are:
-
-```powershell
-docker compose up -d
-.\.venv\Scripts\python.exe scripts/register_schemas.py
-.\.venv\Scripts\python.exe scripts/create_topics.py
-.\.venv\Scripts\python.exe -m seismic_pipeline.producers.fake_earthquake_producer
-.\.venv\Scripts\python.exe -m pytest tests/unit/test_enrichment.py tests/contracts/test_enriched_earthquake_contract.py tests/unit/test_enriching_consumer.py
-.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.enriching_consumer
-```
-
-The direct Python commands use process environment variables or their local defaults; unlike Make, they do not load `.env` automatically. Set `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, `KAFKA_RAW_EARTHQUAKES_TOPIC`, `KAFKA_ENRICHED_EARTHQUAKES_TOPIC`, and `CONSUMER_GROUP_ID` in the shell if you change their defaults.
-
-In Kpow at `http://localhost:3000`, confirm that the raw and enriched topics exist, `enriched_earthquakes` receives records with derived fields and `event_id` keys, and the `seismic-enricher` group has committed offsets on `raw_earthquakes`. Its lag should decrease as records are processed. Phase 10 adds the selective DLQ route described below; ambiguous failures still leave the input uncommitted.
-
-## Phase 5: Postgres Analytical Sink
-
-The second consumer reads Avro from `enriched_earthquakes` through Schema Registry and writes each event to `enriched_earthquake_events`. It uses the separate `seismic-postgres-sink` group. The table has `event_id` as its primary key and the sink uses `ON CONFLICT (event_id) DO NOTHING`: a replay cannot create a second row, and the first stored version wins. The sink commits the Postgres transaction before synchronously committing the Kafka offset. If either step fails, a replay may occur; the primary key makes that replay safe. Corrections to an existing `event_id` are not reflected by this Phase 5 policy.
-
-With Make, initialize the table and run the sink tests after starting the stack:
-
-```bash
+source .venv/bin/activate
+make install
 make up
 make register-schemas
 make create-topics
 make init-db
-make test-sink
 ```
 
-Run `make consume-enrich` and `make consume-sink` in separate terminals; both keep running until interrupted. In a third terminal, run `make produce-fake`. After the consumer logs show stored events, run `make query-db` to see event counts, average magnitude, high-severity events, and average ingestion latency by region.
+On Windows PowerShell, use `Copy-Item .env.example .env` and `.\.venv\Scripts\Activate.ps1` instead of the `cp` and `source` commands. Wait for the Compose services to become ready before registering schemas. The producers require the schemas to be registered first.
 
-On Windows PowerShell without Make, start the stack, register schemas, create topics, initialize Postgres, and run the sink tests:
-
-```powershell
-docker compose up -d
-.\.venv\Scripts\python.exe scripts/register_schemas.py
-.\.venv\Scripts\python.exe scripts/create_topics.py
-docker compose cp .\sql\init.sql postgres:/tmp/init.sql
-docker compose exec -T postgres psql -U seismic_user -d seismic -v ON_ERROR_STOP=1 -f /tmp/init.sql
-.\.venv\Scripts\python.exe -B -m pytest tests/unit/test_postgres_sink.py tests/unit/test_postgres_sink_consumer.py
-```
-
-Run `.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.enriching_consumer` in one terminal and `.\.venv\Scripts\python.exe -m seismic_pipeline.consumers.postgres_sink_consumer` in another. Publish events in a third terminal with `.\.venv\Scripts\python.exe -m seismic_pipeline.producers.fake_earthquake_producer`. Stop the sink with Ctrl+C, then run the analytical queries:
-
-```powershell
-docker compose cp .\sql\analytics_queries.sql postgres:/tmp/analytics_queries.sql
-docker compose exec -T postgres psql -U seismic_user -d seismic -v ON_ERROR_STOP=1 -f /tmp/analytics_queries.sql
-```
-
-Direct Python commands use process environment variables or their local defaults; they do not load `.env` automatically. Set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_SINK_GROUP_ID`, `KAFKA_BOOTSTRAP_SERVERS`, `SCHEMA_REGISTRY_URL`, and `KAFKA_ENRICHED_EARTHQUAKES_TOPIC` in the shell if you change their defaults. Make loads `.env` and exports these settings.
-
-Check `SELECT COUNT(*) FROM enriched_earthquake_events;` in Postgres. In Kpow, inspect the `seismic-postgres-sink` group on `enriched_earthquakes`: committed offsets should advance and lag should reach zero after queued events are stored. Restarting a group resumes at its committed offsets; to deliberately replay retained events for an idempotency check, run the sink with a new `POSTGRES_SINK_GROUP_ID` and confirm the row count does not increase.
-
-## Phase 6: Data Quality Checks
-
-With Postgres running and `enriched_earthquake_events` populated by the Phase 5 sink, run:
+Keep these long-running consumers in **separate terminals**, with the same virtual environment active:
 
 ```bash
-make test-quality
+# Terminal 1
+make consume-enrich
+```
+
+```bash
+# Terminal 2
+make consume-sink
+```
+
+In a third terminal, publish synthetic events and query PostgreSQL:
+
+```bash
+make produce-fake
+make query-db
 make quality-checks
 ```
 
-`quality-checks` prints PASS/FAIL for each rule and a summary. It exits with code `1` if any data rule fails (including an empty table), or `2` if the checks cannot run. Make loads the existing Postgres settings from `.env`. On Windows without Make, use `.\.venv\Scripts\python.exe -m pytest tests/unit/test_quality.py -m "not integration"` for the fast tests and `.\.venv\Scripts\python.exe -m seismic_pipeline.quality.runner` for the checks; direct Python commands use process environment variables or local defaults. See [Data Quality Checks](docs/data-quality.md) for the rules and report interpretation.
+`make produce-live` polls the default worldwide USGS feed once instead; it depends on network access and may return no events. The sink stores the first row for each `event_id`, so later revisions of a USGS event do not replace it. `make query-db` runs the versioned [analytical queries](sql/analytics_queries.sql). Use `make down` when finished; it preserves the local data volumes. Make loads `.env`; direct Python commands do not.
 
-## Phase 7: Testing and CI
-
-Install the development dependencies with `make install` (or `python -m pip install -e ".[dev]"` after activating the virtual environment). Run the same fast checks used by GitHub Actions:
+## Testing and CI
 
 ```bash
-make lint
-make test
-make ci
+make ci                # Ruff + unit, contract, and other service-independent tests
+make test-integration  # isolated real-service integration suite
 ```
 
-`make lint` runs Ruff. `make test` runs the unit, contract, enrichment, sink, and data quality tests that do not require external services. `make ci` runs lint and then those fast tests, and fails if either command fails. On Windows without Make, run `.\.venv\Scripts\python.exe -m ruff check src tests scripts` followed by `.\.venv\Scripts\python.exe -m pytest -m "not integration"`.
+`make ci` calls `make lint` and `make test`; the latter runs `pytest -m "not integration"`. `make test-integration` starts a separate Docker Compose project with Kafka, Schema Registry, and PostgreSQL, creates run-specific topics and groups, runs `pytest -m integration`, then tears down its test containers and volumes. It has controlled readiness and test timeouts, and does **not** need a Kpow license. GitHub Actions runs the two commands in separate `checks` and `integration` jobs on pushes and pull requests.
 
-The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests with Python 3.11. Its `checks` job installs the project with the `dev` extras and calls `make ci`. A separate `integration` job starts isolated Kafka, Schema Registry, and Postgres through `make test-integration`.
+The integration assertions inspect actual Kafka messages, committed offsets, and SQL rows. Scenarios cover end-to-end processing, sink replay without a duplicate row, invalid raw bytes routed to the DLQ, and an offset left pending through a controlled PostgreSQL outage until the sink restarts. See [integration testing](docs/integration-testing.md) and [recovery and replay](docs/recovery-testing.md). Integration tests do not exercise the live USGS HTTP service.
 
-Tests marked `integration` are excluded from `make test` and run in the separate integration job. Locally, `make test-integration` prepares the isolated services and fails if they are unavailable. See [Phase 11 integration testing](docs/integration-testing.md) for setup, isolation, and scenario evidence.
+## Guarantees and scope
 
-## Phase 8: Live Earthquake Producer
+- Processing is at least once, **not end-to-end exactly once**. A crash after output delivery but before offset commit can duplicate an enriched or DLQ Kafka message. PostgreSQL idempotency prevents a second row for the same `event_id`; it does not deduplicate Kafka topics or apply later source updates.
+- The local Kafka deployment has one broker. It does not demonstrate high availability after broker or disk loss. Persistent infrastructure or unexpected errors can stop a consumer and require manual investigation or restart; DLQ records are not automatically replayed.
+- The default USGS feed is worldwide, with limited place-name inference for Chile and no strict geographic filter. This is a local-first implementation, not a cloud production deployment.
 
-The live producer **polls** the USGS GeoJSON feed. USGS does not push events to Kafka: each HTTP response is normalized into `EarthquakeEvent`, serialized with the already registered raw Avro schema, and published to `raw_earthquakes`. The enrichment consumer and Postgres sink use their existing contracts unchanged.
+The completed project ends at **Phase 11**. Cloud deployment, Terraform, Apache Flink, stateful windowed aggregations, watermarks, distributed high availability, new observability tools, producers, dashboards, and business features are outside its scope. The unused metric schema is retained as a historical scaffold, not an implemented metrics stream. See the [closed roadmap](docs/roadmap.md).
 
-For a one-shot run, copy `.env.example` to `.env` if this is a new setup; otherwise add the four `LIVE_` settings from the template to your existing `.env`. Then run:
+## Further documentation
 
-```bash
-make up
-make ps
-make register-schemas
-make create-topics
-make produce-live
-```
-
-The default feed is USGS `all_hour.geojson`, the request timeout is 10 seconds, and `LIVE_PRODUCER_MAX_CYCLES=1` makes one HTTP request. Set `LIVE_PRODUCER_MAX_CYCLES=0` for continuous polling and `LIVE_PRODUCER_POLL_INTERVAL_SECONDS` to control the delay between requests. `LIVE_EARTHQUAKE_FEED_URL` selects another GeoJSON feed with the same feature shape. With an empty feed, the producer logs that no events were returned and exits successfully. Invalid features are logged and skipped. If every HTTP request fails, it exits with an error; with multiple cycles, it retries after the configured interval.
-
-Each published message has `source="usgs"`, `source_event_id` equal to the USGS feature ID, and a stable `event_id` and Kafka key of `usgs:<source_event_id>`. The producer keeps published source IDs in memory to suppress repeats during one run. A restart can publish an event again. Postgres uses `event_id` as a primary key with `ON CONFLICT DO NOTHING`, so a replay does not add a second row; that policy also means later USGS revisions do not replace the first stored row. Features outside the current data-quality ranges are skipped rather than changed silently.
-
-The default USGS feed covers the world; the producer does **not** filter events to Chile. Its location rules are deliberately limited to Chilean names in `properties.place`. A place such as `17 km SSW of Oasis, CA` therefore produces `country="UNKNOWN"` and `region="UNKNOWN"`, even though its coordinates are valid. The normalizer does not interpret US state abbreviations or use coordinates to look up administrative areas. If the pipeline gains a real use case, we can decide whether it needs Chile-only geographic filtering or reliable worldwide country and region enrichment; that scope may justify a structured location source or geocoding. Neither is part of Phase 8.
-
-In Kpow, check `raw_earthquakes` for Avro values with `source=usgs`, keys beginning `usgs:`, and the existing `raw_earthquakes-value` subject. To continue through the pipeline, run `make init-db`, start `make consume-enrich` and `make consume-sink` in separate terminals, and then run `make quality-checks` after events are stored. For a direct PowerShell run without Make, use `.\.venv\Scripts\python.exe -m seismic_pipeline.producers.live_earthquake_producer`; direct Python uses process environment variables or built-in defaults, not `.env` automatically.
-
-## Phase 10: Retry and Dead-Letter Handling
-
-`make create-topics` also creates `dead_letter_earthquakes`. Both consumers
-retry a small set of known transient failures up to three total attempts.
-Clearly invalid Avro framing and validated date/time defects go to the shared
-DLQ as JSON, with original Kafka bytes and source coordinates. The source
-offset advances only after a successful DLQ delivery report. Unknown failures
-and persistent infrastructure failures stop the consumer with the offset
-pending. See [Phase 10 retry and DLQ operations](docs/retry-dead-letter.md)
-for the exact contract, Kpow procedure, local evidence, and limitations.
-
-## Phase 11: Integration and Resilience Testing
-
-`make test-integration` uses a disposable Compose project to test the real
-Kafka → Schema Registry → enrichment → Postgres path, replay idempotence,
-dead-letter delivery, and recovery after a controlled Postgres outage. It
-checks Kafka messages and offsets alongside SQL rows, then removes only its
-test containers and volumes. `make ci` remains the fast lint and offline test
-command. See [Integration and Resilience Testing](docs/integration-testing.md)
-for local commands, failure behavior, CI, and limits.
-
-## Local Services
-
-| Service | Local URL or port |
-| --- | --- |
-| Kafka | `localhost:9092` |
-| Schema Registry | `http://localhost:8081` |
-| Kpow | `http://localhost:3000` after configuring `.env.kpow` |
-| Postgres | `localhost:5432` |
-
-Inside Docker, services communicate through the Compose network. For example, Schema Registry and Kpow use `kafka:29092`, while clients running on the host use `localhost:9092`.
-
-## Logs
-
-```bash
-docker compose logs kafka
-docker compose logs schema-registry
-docker compose logs kpow
-docker compose logs postgres
-```
-
-If `make` is available:
-
-```bash
-make logs
-```
-
-## Stopping The Stack
-
-```bash
-docker compose down
-```
-
-If `make` is available:
-
-```bash
-make down
-```
-
-## Cleaning Local Volumes
-
-This removes local Kafka and Postgres data volumes for the project:
-
-```bash
-docker compose down --volumes --remove-orphans
-```
-
-If `make` is available:
-
-```bash
-make clean
-```
-
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Data Contracts](docs/data-contracts.md)
-- [Data Quality Checks](docs/data-quality.md)
-- [Observability](docs/observability.md)
-- [Fault Recovery and Replay Testing](docs/recovery-testing.md)
-- [Retry and Dead-Letter Handling](docs/retry-dead-letter.md)
-- [Integration and Resilience Testing](docs/integration-testing.md)
-- [Phase 0 Design](docs/phase-0-design.md)
-- [Naming Conventions](docs/naming-conventions.md)
-- [Technical Decisions](docs/technical-decisions.md)
-- [Architecture Decision Records](docs/adr/README.md)
-- [Roadmap](docs/roadmap.md)
+- [Architecture](docs/architecture.md) · [Data contracts](docs/data-contracts.md) · [Data quality](docs/data-quality.md) · [Observability](docs/observability.md)
+- [Recovery and replay](docs/recovery-testing.md) · [Retry and DLQ](docs/retry-dead-letter.md) · [Integration testing](docs/integration-testing.md)
+- [Architecture decisions](docs/adr/README.md) · [Technical decisions](docs/technical-decisions.md) · [Roadmap](docs/roadmap.md)

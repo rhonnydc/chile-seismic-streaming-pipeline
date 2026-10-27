@@ -1,9 +1,9 @@
 # 007 — Optional cloud infrastructure
 
-**Status:** Proposed · **Phase:** Later
+**Status:** Closed — not adopted · **Phase:** Historical proposal
 
-**Decision.** Consider Terraform only if a real deployment need emerges after the local pipeline and CI are stable. Keep Compose as the reproducible development path. Isolate cloud credentials, state, and environment-specific settings from application code and committed files.
+**Historical proposal.** Terraform was considered as an optional deployment layer. It was not implemented. The completed project closes at Phase 11 with Docker Compose as its reproducible local runtime; cloud deployment is outside scope.
 
 **Reason.** Provisioning should deploy a proven data flow, not determine its event semantics or block local validation.
 
-**Adoption gate.** A cloud deployment consumes the same versioned event contracts and passes the same contract tests. Local tests and demos continue to run without cloud access.
+**Outcome.** No Terraform resources or cloud environment are part of this repository. The [closed roadmap](../roadmap.md) records the final scope.

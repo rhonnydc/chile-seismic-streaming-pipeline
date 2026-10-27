@@ -1,9 +1,9 @@
 # 006 — CI quality gates
 
-**Status:** Proposed · **Phase:** 7
+**Status:** Accepted · **Phase:** 7, extended in Phase 11
 
-**Decision.** GitHub Actions will run Ruff linting and the fast pytest suite on each push and pull request. The fast suite includes unit, contract, enrichment, sink, and data quality tests that do not require Kafka, Schema Registry, or Postgres. Tests that require real services are marked `integration` and excluded from this initial CI workflow. `make ci` runs the same checks locally.
+**Decision.** GitHub Actions runs Ruff linting and the fast pytest suite through `make ci` on each push and pull request. The fast suite includes unit, contract, enrichment, sink, and data quality tests without external services. Tests marked `integration` are excluded from this job. A separate job runs `make test-integration` against isolated Kafka, Schema Registry, and PostgreSQL services.
 
-**Reason.** Fast, service-independent checks give contributors prompt and reproducible feedback without the setup and failure modes of Docker services. Integration tests still provide valuable coverage of process boundaries and can run locally with the required services available.
+**Reason.** Separating fast checks from real-service integration checks keeps the dependency boundary visible while verifying process boundaries in CI.
 
-**Adoption gate.** The workflow fails when Ruff or any fast test fails and passes from a clean checkout without starting Kafka, Schema Registry, or Postgres. Local integration tests remain available through `make test-integration`; adding service-backed CI coverage is a later decision.
+**Verification.** The [workflow](../../.github/workflows/ci.yml) has separate `checks` and `integration` jobs. The [integration runner](../../scripts/run_integration.py) owns setup, readiness, test execution, and teardown.
